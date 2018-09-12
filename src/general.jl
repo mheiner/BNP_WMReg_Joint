@@ -123,35 +123,35 @@ mutable struct Mod_DPmRegJoint
 end
 
 mutable struct PostSims_DPmRegJoint
-    μ_y::Array{Float32, 2}  # nsim by H matrix
-    β_y::Array{Float32, 3}  # nsim by H by K array
-    δ_y::Array{Float32, 2}  # nsim by H matrix
-    μ_x::Array{Float32, 3}  # nsim by H by K array
-    β_x::Array{Array{Float32, 3}, 1}    # vector of nsim by H by (k in 1:(K-1)) arrays
-    δ_x::Array{Float32,3}   # nsim by H by K array
+    μ_y::Array{<:Real, 2}  # nsim by H matrix
+    β_y::Array{<:Real, 3}  # nsim by H by K array
+    δ_y::Array{<:Real, 2}  # nsim by H matrix
+    μ_x::Array{<:Real, 3}  # nsim by H by K array
+    β_x::Array{Array{<:Real, 3}, 1}    # vector of nsim by H by (k in 1:(K-1)) arrays
+    δ_x::Array{<:Real,3}   # nsim by H by K array
 
     # weights, alpha
-    ω::Array{Float32, 2}   # nsim by H matrix
-    α::Array{Float32, 1}    # nsim vector
+    ω::Array{<:Real, 2}   # nsim by H matrix
+    α::Array{<:Real, 1}    # nsim vector
 
     # states
-    S::Array{Int16, 2}      # nsim by n matrix
+    S::Array{<:Integer, 2}      # nsim by n matrix
 
     # G0
-    β0_ηy::Array{Float32, 2}    # nsim by K+1 matrix
-    Λ0_ηy::Array{Float32, 2}    # nsim by length(vech) matrix
+    β0_ηy::Array{<:Real, 2}    # nsim by K+1 matrix
+    Λ0_ηy::Array{<:Real, 2}    # nsim by length(vech) matrix
 
-    ν_δy::Array{Float32, 1}     # nsim vector
-    s0_δy::Array{Float32, 1}    # nsim vector
+    ν_δy::Array{<:Real, 1}     # nsim vector
+    s0_δy::Array{<:Real, 1}    # nsim vector
 
-    μ0_μx::Array{Float32, 2}    # nsim by K matrix
-    Λ0_μx::Array{Float32, 2}    # nsim by length(vech) matrix
+    μ0_μx::Array{<:Real, 2}    # nsim by K matrix
+    Λ0_μx::Array{<:Real, 2}    # nsim by length(vech) matrix
 
-    β0_βx::Array{Array{Float32, 2}, 1}  # vector of nsim by (k in 1:(K-1)) matrices
-    Λ0_βx::Array{Array{Float32, 2}, 1}  # vector of nsim by length(vech) matrices
+    β0_βx::Array{Array{<:Real, 2}, 1}  # vector of nsim by (k in 1:(K-1)) matrices
+    Λ0_βx::Array{Array{<:Real, 2}, 1}  # vector of nsim by length(vech) matrices
 
-    ν_δx::Array{Float32, 2}     # nsim by K matrix
-    s0_δx::Array{Float32, 2}    # nsim by K matrix
+    ν_δx::Array{<:Real, 2}     # nsim by K matrix
+    s0_δx::Array{<:Real, 2}    # nsim by K matrix
 
 PostSims_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
 ω, α, S,
@@ -162,26 +162,26 @@ PostSims_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
 μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx)
 end
 
-PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int) = PostSims_DPmRegJoint(
-(m.ηω ? Array{Float32, 2}(undef, n_keep, H) : Array{Float32, 2}(undef, 0, 0)), # μ_y
-(m.ηω ? Array{Float32, 3}(undef, n_keep, H, K) : Array{Float32, 3}(undef, 0, 0, 0)), # β_y
-(m.ηω ? Array{Float32, 2}(undef, n_keep, H) : Array{Float32, 2}(undef, 0, 0)), # δ_y
-(m.ηω ? Array{Float32, 3}(undef, n_keep, H, K) : Array{Float32, 3}(undef, 0, 0, 0)), # μ_x
-(m.ηω && K > 1 ? [ Array{Float32, 3}(undef, n_keep, H, k) for k = 1:(K-1) ] : [ Array{Float32, 3}(undef, 0, 0, 0) for k = 1:2 ] ), # β_x
-(m.ηω ? Array{Float32, 3}(undef, n_keep, H, K) : Array{Float32, 3}(undef, 0, 0, 0)), # δ_x
-(m.ηω ? Array{Float32, 2}(undef, n_keep, H) : Array{Float32, 2}(undef, 0, 0)), # ω
-(m.ηω ? Array{Float32, 1}(undef, n_keep) : Array{Float32, 1}(undef, 0)), # α
-(m.S ? Array{Int16, 2}(undef, n_keep, n) : Array{Int16, 2}(undef, 0, 0)), # S
-(m.G0 ? Array{Float32, 2}(undef, n_keep, K+1) : Array{Float32, 2}(undef, 0, 0)), # β0_ηy
-(m.G0 ? Array{Float32, 2}(undef, n_keep, (K+1)*(K+2)/2) : Array{Float32, 2}(undef, 0, 0)), # Λ0_ηy
-(m.G0 ? Array{Float32, 1}(undef, n_keep) : Array{Float32, 1}(undef, 0)), # ν_δy
-(m.G0 ? Array{Float32, 1}(undef, n_keep) : Array{Float32, 1}(undef, 0)), # s0_δy
-(m.G0 ? Array{Float32, 2}(undef, n_keep, K) : Array{Float32, 2}(undef, 0, 0)), # μ0_μx
-(m.G0 ? Array{Float32, 2}(undef, n_keep, (K)*(K+1)/2) : Array{Float32, 2}(undef, 0, 0)), # Λ0_μx
-(m.G0 && K > 1 ? [ Array{Float32, 2}(undef, n_keep, k) for k = 1:(K-1) ] : [ Array{Float32, 2}(undef, 0, 0) for k = 1:2 ] ), # β0_βx
-(m.G0 && K > 1 ? [ Array{Float32, 2}(undef, n_keep, k*(k+1)/2) for k = 1:(K-1) ] : [ Array{Float32, 2}(undef, 0, 0) for k = 1:2 ] ), # Λ0_βx
-(m.G0 ? Array{Float32, 2}(undef, n_keep, K) : Array{Float32, 2}(undef, 0, 0)), # ν_δx
-(m.G0 ? Array{Float32, 2}(undef, n_keep, K) : Array{Float32, 2}(undef, 0, 0)) ) # s0_δx
+PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int, samptypes::Tuple{<:Real, <:Integer}) = PostSims_DPmRegJoint(
+(m.ηω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # μ_y
+(m.ηω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # β_y
+(m.ηω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # δ_y
+(m.ηω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # μ_x
+(m.ηω && K > 1 ? [ Array{samptypes[1], 3}(undef, n_keep, H, k) for k = 1:(K-1) ] : [ Array{samptypes[1], 3}(undef, 0, 0, 0) for k = 1:2 ] ), # β_x
+(m.ηω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # δ_x
+(m.ηω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # ω
+(m.ηω ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # α
+(m.S ? Array{samptypes[2], 2}(undef, n_keep, n) : Array{samptypes[2], 2}(undef, 0, 0)), # S
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K+1) : Array{samptypes[1], 2}(undef, 0, 0)), # β0_ηy
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, (K+1)*(K+2)/2) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0_ηy
+(m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # ν_δy
+(m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # s0_δy
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # μ0_μx
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, (K)*(K+1)/2) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0_μx
+(m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k) for k = 1:(K-1) ] : [ Array{samptypes[1], 2}(undef, 0, 0) for k = 1:2 ] ), # β0_βx
+(m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k*(k+1)/2) for k = 1:(K-1) ] : [ Array{samptypes[1], 2}(undef, 0, 0) for k = 1:2 ] ), # Λ0_βx
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # ν_δx
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)) ) # s0_δx
 
 mutable struct Monitor_DPmRegJoint
     ηω::Bool

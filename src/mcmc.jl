@@ -4,23 +4,16 @@
 mcmc_DPmRegJoint!(model, n_keep[, save=true, report_filename="out_progress.txt",
 thin=1, report_freq=10000])
 """
-function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int, save::Bool=true,
+function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int,
+    monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false),
     report_filename::String="out_progress.txt", thin::Int=1,
-    report_freq::Int=10000)
+    report_freq::Int=10000, samptypes=(Float32, Int32))
 
     ## output files
     report_file = open(report_filename, "a+")
     write(report_file, "Commencing MCMC at $(now()) for $(n_keep * thin) iterations.\n")
 
-    if save
-        sims = PostSimsMMTD( Matrix{Float64}(n_keep, model.M), # Λ
-        [ Matrix{Float64}(n_keep, model.λ_indx.lens[m]) for m in 1:model.M ], # λ
-        [ Matrix{Float64}(n_keep, model.K^(m+1)) for m in 1:model.M ], # Q
-        Matrix{Int}(n_keep, monitor_len), # Zζ
-        Matrix{Float64}(n_keep, model.M), # p1λ
-        [ Matrix{Float64}(n_keep, model.K^m) for m in 1:model.M ] #= p1Q =# )
-    end
-
+    sims = PostSims_DPmRegJoint(monitor, n_keep, n, K, H, samptypes)
 
     ## sampling
     for i in 1:n_keep
