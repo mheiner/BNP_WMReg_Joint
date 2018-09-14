@@ -1,8 +1,10 @@
 # mcmc.jl
 
+export mcmc_DPmRegJoint!;
+
 """
-mcmc_DPmRegJoint!(model, n_keep[, save=true, report_filename="out_progress.txt",
-thin=1, report_freq=10000])
+mcmc_DPmRegJoint!(model, n_keep[, monitor, report_filename="out_progress.txt",
+thin=1, report_freq=10000, samptypes])
 """
 function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int,
     monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false),
@@ -14,6 +16,11 @@ function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int,
     write(report_file, "Commencing MCMC at $(now()) for $(n_keep * thin) iterations.\n")
 
     sims = PostSims_DPmRegJoint(monitor, n_keep, n, K, H, samptypes)
+    start_accpt = copy(model.accpt)
+    start_iter = copy(model.iter)
+    prev_accpt = copy(model.accpt) # set every report_freq iterations
+
+    yX = hcat(y, X) # useful for allocation update
 
     ## sampling
     for i in 1:n_keep
@@ -31,25 +38,22 @@ function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int,
             model.iter += 1
             if model.iter % report_freq == 0
                 write(report_file, "Iter $(model.iter) at $(now())\n")
+                write(report_file, "Current Metropolis acceptance rates: $(float((model.accpt - prev_accpt) / report_freq))\n\n")
+                prev_accpt = copy(model.accpt)
             end
         end
 
-        if save
-            @inbounds sims.Λ[i,:] = exp.( model.state.lΛ )
-            @inbounds sims.Zζ[i,:] = copy(model.state.Zζ[monitor_indx])
-            for m in 1:model.M
-                @inbounds sims.λ[m][i,:] = exp.( model.state.lλ[m] )
-                @inbounds sims.Q[m][i,:] = exp.( vec( model.state.lQ[m] ) )
-            end
+        if monitor.ηω
+
+        end
+        if monitor.S
+
+        end
+        if monitor.G0
+
         end
     end
 
     close(report_file)
-
-    if save
-        return sims
-    else
-        return model.iter
-    end
-
+    return (sims, float((model.accpt - start_accpt)/(model.iter - start_iter)) )
 end
