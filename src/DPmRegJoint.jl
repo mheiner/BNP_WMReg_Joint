@@ -12,7 +12,7 @@ include("general.jl")
 include("mcmc.jl")
 include("sqfChol.jl")
 include("update_states.jl")
-
+include("update_weights.jl")
 
 
 end

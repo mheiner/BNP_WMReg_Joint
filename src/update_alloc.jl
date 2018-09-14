@@ -3,13 +3,13 @@
 function update_alloc!(model::Mod_DPmRegJoint, yX::Array{T,2}) where T <: Real
 
     μ = hcat(model.state.μ_y, model.state.μ_x)
-    β = [β_y, β_x...]
+    β = [model.state.β_y, model.state.β_x...]
     δ = hcat(model.state.δ_y, model.state.δ_x)
 
     # this could be done in parallel
-    lW = hcat([ model.state.lω[h] .+
+    lW = hcat([ log(model.state.ω[h]) .+
                 logpdf( MvNormal(μ[h,:],
-                                 sqfChol2Σ([ B[k][h,:] for k = 1:K ],
+                                 sqfChol2Σ([ β[k][h,:] for k = 1:K ],
                                            δ[h,:])),
                         Matrix(yX')
                       )
@@ -20,7 +20,8 @@ function update_alloc!(model::Mod_DPmRegJoint, yX::Array{T,2}) where T <: Real
     bc_lWmimusms = broadcast(-, lW, ms)
     W = exp.(bc_lWmimusms)
 
-    alloc_out = [ sample(Weights(W[i,:])) for i = 1:model.n ]
+    alloc_new = [ sample(StatsBase.Weights(W[i,:])) for i = 1:model.n ]
+    model.state.S = alloc_new
 
-    model.state.S = alloc_out
+    return nothing
 end

@@ -1,6 +1,6 @@
 # general.jl
 
-export Params_DPmRegJoint, Prior_DPmRegJoint, Mod_DPmRegJoint,
+export Params_DPmRegJoint, Prior_DPmRegJoint, Model_DPmRegJoint,
     Monitor_DPmRegJoint, PostSims_DPmRegJoint;
 
 mutable struct Params_DPmRegJoint
@@ -10,12 +10,12 @@ mutable struct Params_DPmRegJoint
     β_y::Array{Float64, 2}  # H by K matrix
     δ_y::Array{Float64, 1}  # H vector
     μ_x::Array{Float64, 2}  # H by K matrix
-    β_x::Union{Array{Array{Float64, 2}, 1}, Nothing}  # vector of H by (k in 1:(K-1)) matrices
+    β_x::Union{Array{Array{Float64, 2}, 1}, Nothing}  # vector of H by (k in (K-1):1) matrices
     δ_x::Array{Float64,2}   # H by K matrix
 
     # allocation states, weights
     S::Array{Int, 1}        # n vector
-    lω::Array{Float64, 1}   # H vector
+    ω::Array{Float64, 1}   # H vector
     v::Array{Float64, 1}    # H-1 vector
     α::Float64
 
@@ -29,16 +29,16 @@ mutable struct Params_DPmRegJoint
     μ0_μx::Array{Float64, 1}    # K vector
     Λ0_μx::PDMat{Float64}       # K by K precision matrix
 
-    β0_βx::Union{Array{Array{Float64, 1}, 1}, Nothing} # vector of (k in 1:(K-1)) vectors
-    Λ0_βx::Union{Array{PDMat{Float64}, 1}, Nothing}    # vector of k by k (for k in 1:(K-1)) precison matrices
+    β0_βx::Union{Array{Array{Float64, 1}, 1}, Nothing} # vector of (k in (K-1):1) vectors
+    Λ0_βx::Union{Array{PDMat{Float64}, 1}, Nothing}    # vector of k by k (for k in (K-1):1) precison matrices
 
     ν_δx::Array{Float64, 1}     # K vector
     s0_δx::Array{Float64, 1}    # K vector
 
     Params_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-        S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        S, ω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-            S, lω, lω2v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+            S, ω, ω_to_v(ω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
             β0_βx, Λ0_βx, ν_δx, s0_δx)
 end
 
@@ -47,7 +47,7 @@ struct Prior_DPmRegJoint
     α_rate::Float64 # gamma rate
 
     β0_ηy_mean::Array{Float64, 1}   # MVN mean vector
-    β0_ηy_Cov::PDMat{Float64}       # MVN precision matrix
+    β0_ηy_Cov::PDMat{Float64}       # MVN covariance matrix
     β0_ηy_Prec::PDMat{Float64}      # MVN precision matrix
 
     Λ0_ηy_df::Float64           # Wishart deg. of freedom
@@ -57,14 +57,14 @@ struct Prior_DPmRegJoint
     s0_δy_s0::Float64   # scaled inv. chi-square harmonic mean
 
     μ0_μx_mean::Array{Float64, 1}   # MVN mean vector
-    μ0_μx_Cov::PDMat{Float64}       # MVN precision matrix
+    μ0_μx_Cov::PDMat{Float64}       # MVN covariance matrix
     μ0_μx_Prec::PDMat{Float64}      # MVN precision matrix
 
     Λ0_μx_df::Float64           # Wishart deg. of freedom
     Λ0_μx_S0::PDMat{Float64}    # Prior harmonic mean of Λ0inv; inverse scale of Wishart divided by deg. of freedom
 
     β0_βx_mean::Union{Array{Array{Float64, 1}, 1}, Nothing} # vector of MVN mean vectors
-    β0_βx_Cov::Union{Array{PDMat{Float64}, 1}, Nothing}     # vector of MVN precision matrices
+    β0_βx_Cov::Union{Array{PDMat{Float64}, 1}, Nothing}     # vector of MVN covariance matrices
     β0_βx_Prec::Union{Array{PDMat{Float64}, 1}, Nothing}    # vector of MVN precision matrices
 
     Λ0_βx_df::Union{Array{Float64, 1}, Nothing}         # vector of Wishart deg. of freedom
@@ -80,11 +80,11 @@ struct Prior_DPmRegJoint
     s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, β0_ηy_mean, β0_ηy_Cov, inv(β0_ηy_Cov),
     Λ0_ηy_df, Λ0_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, inv(μ0_μx_Cov), Λ0_μx_df, Λ0_μx_S0,
-    β0_βx_mean, β0_βx_Cov, inv(β0_βx_Cov), Λ0_βx_df, Λ0_βx_S0,
+    β0_βx_mean, β0_βx_Cov, [inv(β0_βx_Cov[k]) for k = 1:length(β0_βx_Cov)], Λ0_βx_df, Λ0_βx_S0,
     s0_δx_df, s0_δx_s0)
 end
 
-mutable struct Mod_DPmRegJoint
+mutable struct Model_DPmRegJoint
     y::Array{Float64, 1}
     X::Array{Float64, 2}
     n::Int # length of data
@@ -93,7 +93,7 @@ mutable struct Mod_DPmRegJoint
     prior::Prior_DPmRegJoint
     state::Params_DPmRegJoint
     iter::Int
-    accpt::Array{Int, 1}
+    accpt::Array{Int, 1} # H vector
     cSig_ηx::Array{PDMat{Float64}, 1}
     adapt::Bool
     adapt_iter::Union{Int, Nothing}
@@ -101,14 +101,14 @@ mutable struct Mod_DPmRegJoint
     runningSS_ηx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
 
     # for coninuing an adapt phase
-    Mod_DPmRegJoint(y, X, H, prior, state,
+    Model_DPmRegJoint(y, X, H, prior, state,
     iter, accpt, cSig_ηx,
     adapt, adapt_iter, runningsum_ηx, runningSS_ηx) = new(y, X, length(y), size(X,2), H, prior, state,
     iter, accpt, cSig_ηx,
     adapt, adapt_iter, runningsum_ηx, runningSS_ηx)
 
     # for starting new
-    Mod_DPmRegJoint(y, X, H, prior, state, cSig_ηx,
+    Model_DPmRegJoint(y, X, H, prior, state, cSig_ηx,
     adapt) = new(y, X, length(y), size(X,2), H, prior, state,
     0, zeros{Int, H}, cSig_ηx,
     adapt, 0,
@@ -116,7 +116,7 @@ mutable struct Mod_DPmRegJoint
     zeros( Float64, H, (size(X,2) + size(X,2)*(size(X,2)+1)/2), (size(X,2) + size(X,2)*(size(X,2)+1)/2) ) )
 
     # for starting new but not adapting
-    Mod_DPmRegJoint(y, X, H, prior, state,
+    Model_DPmRegJoint(y, X, H, prior, state,
     iter, accpt, cSig_ηx) = new(y, X, length(y), size(X,2), H, prior, state,
     iter, accpt, cSig_ηx,
     false, nothing, nothing, nothing)
@@ -127,7 +127,7 @@ mutable struct PostSims_DPmRegJoint
     β_y::Array{<:Real, 3}  # nsim by H by K array
     δ_y::Array{<:Real, 2}  # nsim by H matrix
     μ_x::Array{<:Real, 3}  # nsim by H by K array
-    β_x::Array{Array{<:Real, 3}, 1}    # vector of nsim by H by (k in 1:(K-1)) arrays
+    β_x::Array{Array{<:Real, 3}, 1}    # vector of nsim by H by (k in (K-1):1) arrays
     δ_x::Array{<:Real,3}   # nsim by H by K array
 
     # weights, alpha
@@ -147,7 +147,7 @@ mutable struct PostSims_DPmRegJoint
     μ0_μx::Array{<:Real, 2}    # nsim by K matrix
     Λ0_μx::Array{<:Real, 2}    # nsim by length(vech) matrix
 
-    β0_βx::Array{Array{<:Real, 2}, 1}  # vector of nsim by (k in 1:(K-1)) matrices
+    β0_βx::Array{Array{<:Real, 2}, 1}  # vector of nsim by (k in (K-1):1) matrices
     Λ0_βx::Array{Array{<:Real, 2}, 1}  # vector of nsim by length(vech) matrices
 
     ν_δx::Array{<:Real, 2}     # nsim by K matrix
@@ -160,6 +160,12 @@ PostSims_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
 ω, α, S,
 β0_ηy, Λ0_ηy, ν_δy, s0_δy,
 μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx)
+end
+
+mutable struct Monitor_DPmRegJoint
+    ηω::Bool
+    S::Bool
+    G0::Bool
 end
 
 PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int, samptypes::Tuple{<:Real, <:Integer}) = PostSims_DPmRegJoint(
@@ -182,9 +188,3 @@ PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int
 (m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k*(k+1)/2) for k = (K-1):-1:1 ] : [ Array{samptypes[1], 2}(undef, 0, 0) for k = 1:2 ] ), # Λ0_βx
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # ν_δx
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)) ) # s0_δx
-
-mutable struct Monitor_DPmRegJoint
-    ηω::Bool
-    S::Bool
-    G0::Bool
-end

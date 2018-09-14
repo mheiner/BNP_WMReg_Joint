@@ -5,8 +5,8 @@ export sqfChol2Σ;
 ## Note this follows my unconventional definition of the square-root-free
 # Cholesky decomposition with construction from the back of the vector.
 function sqfChol2Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
-    sqrtΔ = Diagonal(sqrt.(δ_x))
-    βmat = BayesInference.xpnd_tri(vcat(β_x...), false)'
+    sqrtΔ = Diagonal(sqrt.(δ))
+    βmat = BayesInference.xpnd_tri(vcat(β...), false)'
 
     βinvSqrtΔ = Matrix(βmat \ sqrtΔ)
     Σ = βinvSqrtΔ * βinvSqrtΔ'
