@@ -11,7 +11,7 @@ using BayesInference # personal package
 include("general.jl")
 include("mcmc.jl")
 include("sqfChol.jl")
-include("update_states.jl")
+include("update_alloc.jl")
 include("update_weights.jl")
 
 

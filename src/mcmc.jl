@@ -21,6 +21,7 @@ function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int,
     prev_accpt = copy(model.accpt) # set every report_freq iterations
 
     yX = hcat(y, X) # useful for allocation update
+    model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
 
     ## sampling
     for i in 1:n_keep
@@ -43,7 +44,7 @@ function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int,
             end
         end
 
-        if monitor.ηω
+        if monitor.ηlω
 
         end
         if monitor.S

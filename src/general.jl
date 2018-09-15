@@ -1,10 +1,11 @@
 # general.jl
 
-export Params_DPmRegJoint, Prior_DPmRegJoint, Model_DPmRegJoint,
-    Monitor_DPmRegJoint, PostSims_DPmRegJoint;
+export State_DPmRegJoint, Prior_DPmRegJoint, Model_DPmRegJoint,
+    Monitor_DPmRegJoint, PostSims_DPmRegJoint, compute_lNX;
 
-mutable struct Params_DPmRegJoint
+mutable struct State_DPmRegJoint
 
+    ### Parameters
     # component (kernel parameters) η
     μ_y::Array{Float64, 1}  # H vector
     β_y::Array{Float64, 2}  # H by K matrix
@@ -15,7 +16,7 @@ mutable struct Params_DPmRegJoint
 
     # allocation states, weights
     S::Array{Int, 1}        # n vector
-    ω::Array{Float64, 1}   # H vector
+    lω::Array{Float64, 1}   # H vector
     v::Array{Float64, 1}    # H-1 vector
     α::Float64
 
@@ -35,11 +36,52 @@ mutable struct Params_DPmRegJoint
     ν_δx::Array{Float64, 1}     # K vector
     s0_δx::Array{Float64, 1}    # K vector
 
-    Params_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-        S, ω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
-        β0_βx, Λ0_βx, ν_δx, s0_δx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-            S, ω, ω_to_v(ω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
-            β0_βx, Λ0_βx, ν_δx, s0_δx)
+    ### other state objects
+    iter::Int
+    accpt::Array{Int, 1} # H vector
+    cSig_ηx::Array{PDMat{Float64}, 1}
+    adapt::Bool
+    adapt_iter::Union{Int, Nothing}
+    runningsum_ηx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
+    runningSS_ηx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
+    lNX::Array{Float64, 2} # n by H matrix of log(pdf(Normal(x_i))) under each obs i and allocation h
+
+
+    # for coninuing an adapt phase
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    β0_βx, Λ0_βx, ν_δx, s0_δx,
+    iter, accpt, cSig_ηx,
+    adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+        S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        β0_βx, Λ0_βx, ν_δx, s0_δx,
+        iter, accpt, cSig_ηx,
+        adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX)
+
+    # for starting new
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    β0_βx, Λ0_βx, ν_δx, s0_δx,
+    cSig_ηx, adapt) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+        S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        β0_βx, Λ0_βx, ν_δx, s0_δx,
+        0, zeros(Int, length(lω)), cSig_ηx,
+        adapt, 0,
+        zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
+        zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
+                        Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
+        zeros(Float64, 1, 1) )
+
+    # for starting new but not adapting
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    β0_βx, Λ0_βx, ν_δx, s0_δx,
+    iter, accpt, cSig_ηx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+        S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        β0_βx, Λ0_βx, ν_δx, s0_δx,
+        iter, accpt, cSig_ηx,
+        false, nothing, nothing, nothing,
+        zeros(Float64, 1, 1))
 end
 
 struct Prior_DPmRegJoint
@@ -91,35 +133,10 @@ mutable struct Model_DPmRegJoint
     K::Int # number of predictors (columns in X)
     H::Int # DP truncation level
     prior::Prior_DPmRegJoint
-    state::Params_DPmRegJoint
-    iter::Int
-    accpt::Array{Int, 1} # H vector
-    cSig_ηx::Array{PDMat{Float64}, 1}
-    adapt::Bool
-    adapt_iter::Union{Int, Nothing}
-    runningsum_ηx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
-    runningSS_ηx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
 
-    # for coninuing an adapt phase
-    Model_DPmRegJoint(y, X, H, prior, state,
-    iter, accpt, cSig_ηx,
-    adapt, adapt_iter, runningsum_ηx, runningSS_ηx) = new(y, X, length(y), size(X,2), H, prior, state,
-    iter, accpt, cSig_ηx,
-    adapt, adapt_iter, runningsum_ηx, runningSS_ηx)
+    state::State_DPmRegJoint # this is the only thing that should change
 
-    # for starting new
-    Model_DPmRegJoint(y, X, H, prior, state, cSig_ηx,
-    adapt) = new(y, X, length(y), size(X,2), H, prior, state,
-    0, zeros{Int, H}, cSig_ηx,
-    adapt, 0,
-    zeros( Float64, H, (size(X,2) + size(X,2)*(size(X,2)+1)/2) ),
-    zeros( Float64, H, (size(X,2) + size(X,2)*(size(X,2)+1)/2), (size(X,2) + size(X,2)*(size(X,2)+1)/2) ) )
-
-    # for starting new but not adapting
-    Model_DPmRegJoint(y, X, H, prior, state,
-    iter, accpt, cSig_ηx) = new(y, X, length(y), size(X,2), H, prior, state,
-    iter, accpt, cSig_ηx,
-    false, nothing, nothing, nothing)
+    Model_DPmRegJoint(y, X, H, prior, state) = new(y, X, length(y), size(X,2), H, prior, state)
 end
 
 mutable struct PostSims_DPmRegJoint
@@ -131,7 +148,7 @@ mutable struct PostSims_DPmRegJoint
     δ_x::Array{<:Real,3}   # nsim by H by K array
 
     # weights, alpha
-    ω::Array{<:Real, 2}   # nsim by H matrix
+    lω::Array{<:Real, 2}   # nsim by H matrix
     α::Array{<:Real, 1}    # nsim vector
 
     # states
@@ -154,29 +171,29 @@ mutable struct PostSims_DPmRegJoint
     s0_δx::Array{<:Real, 2}    # nsim by K matrix
 
 PostSims_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-ω, α, S,
+lω, α, S,
 β0_ηy, Λ0_ηy, ν_δy, s0_δy,
 μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-ω, α, S,
+lω, α, S,
 β0_ηy, Λ0_ηy, ν_δy, s0_δy,
 μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx)
 end
 
 mutable struct Monitor_DPmRegJoint
-    ηω::Bool
+    ηlω::Bool
     S::Bool
     G0::Bool
 end
 
 PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int, samptypes::Tuple{<:Real, <:Integer}) = PostSims_DPmRegJoint(
-(m.ηω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # μ_y
-(m.ηω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # β_y
-(m.ηω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # δ_y
-(m.ηω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # μ_x
-(m.ηω && K > 1 ? [ Array{samptypes[1], 3}(undef, n_keep, H, k) for k = (K-1):-1:1 ] : [ Array{samptypes[1], 3}(undef, 0, 0, 0) for k = 1:2 ] ), # β_x
-(m.ηω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # δ_x
-(m.ηω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # ω
-(m.ηω ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # α
+(m.ηlω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # μ_y
+(m.ηlω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # β_y
+(m.ηlω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # δ_y
+(m.ηlω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # μ_x
+(m.ηlω && K > 1 ? [ Array{samptypes[1], 3}(undef, n_keep, H, k) for k = (K-1):-1:1 ] : [ Array{samptypes[1], 3}(undef, 0, 0, 0) for k = 1:2 ] ), # β_x
+(m.ηlω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # δ_x
+(m.ηlω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # lω
+(m.ηlω ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # α
 (m.S ? Array{samptypes[2], 2}(undef, n_keep, n) : Array{samptypes[2], 2}(undef, 0, 0)), # S
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K+1) : Array{samptypes[1], 2}(undef, 0, 0)), # β0_ηy
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, (K+1)*(K+2)/2) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0_ηy
@@ -188,3 +205,8 @@ PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int
 (m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k*(k+1)/2) for k = (K-1):-1:1 ] : [ Array{samptypes[1], 2}(undef, 0, 0) for k = 1:2 ] ), # Λ0_βx
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # ν_δx
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)) ) # s0_δx
+
+function lNXmat(X::Array{T, 2}, μ::Array{T, 2}, β::Array{Array{T, 2}, 1}, δ::Array{T, 2}) where T <: Real
+    hcat( [lNX_sqfChol( Matrix(X'), μ[h,:], [ β[k][h,:] for k = 1:(size(X,2)-1) ], δ[h,:] )
+            for h = 1:size(μ, 1) ]...)
+end

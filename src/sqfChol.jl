@@ -1,10 +1,10 @@
 # sqfChol.jl
 
-export sqfChol2Σ;
+export sqfChol_to_Σ;
 
 ## Note this follows my unconventional definition of the square-root-free
 # Cholesky decomposition with construction from the back of the vector.
-function sqfChol2Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
+function sqfChol_to_Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
     sqrtΔ = Diagonal(sqrt.(δ))
     βmat = BayesInference.xpnd_tri(vcat(β...), false)'
 
@@ -14,15 +14,14 @@ function sqfChol2Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
     PDMat(Σ)
 end
 
-## This function doesn't need to be exported. Just use its contents in the code to be readable.
-# function lNX(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
-#     β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
-#
-#     Σ = sqfChol2Σ(β, δ)
-#     d = MultivariateNormal(μ, Σ)
-#
-#     logpdf(d, X)
-# end
+function lNX_sqfChol(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
+    β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
+
+    Σ = sqfChol_to_Σ(β, δ)
+    d = MultivariateNormal(μ, Σ)
+
+    logpdf(d, X)
+end
 
 # function lNX_seq(x::Array{T, 1}, μ::Array{T, 1},
 #     β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
@@ -55,7 +54,7 @@ end
 # β_x = [ randn(k) for k = (K-1):-1:1 ]
 #
 #
-# Σ = sqfChol2Σ(β_x, δ_x)
+# Σ = sqfChol_to_Σ(β_x, δ_x)
 # MvNormal(μ_x, Σ)
 #
 # using BenchmarkTools
