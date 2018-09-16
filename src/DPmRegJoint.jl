@@ -13,6 +13,6 @@ include("mcmc.jl")
 include("sqfChol.jl")
 include("update_alloc.jl")
 include("update_weights.jl")
-
+include("update_eta_Met.jl")
 
 end

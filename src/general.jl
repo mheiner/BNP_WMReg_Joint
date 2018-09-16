@@ -39,49 +39,49 @@ mutable struct State_DPmRegJoint
     ### other state objects
     iter::Int
     accpt::Array{Int, 1} # H vector
-    cSig_ηx::Array{PDMat{Float64}, 1}
+    cSig_ηlδx::Array{PDMat{Float64}, 1}
     adapt::Bool
     adapt_iter::Union{Int, Nothing}
     runningsum_ηx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
     runningSS_ηx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
     lNX::Array{Float64, 2} # n by H matrix of log(pdf(Normal(x_i))) under each obs i and allocation h
-
+    lωNX_vec::Array{Float64, 1} # n vector with log( sum_j ωN(x_i) )
 
     # for coninuing an adapt phase
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
     S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
-    iter, accpt, cSig_ηx,
-    adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    iter, accpt, cSig_ηlδx,
+    adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX, lωNX_vec) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
         S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
-        iter, accpt, cSig_ηx,
-        adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX)
+        iter, accpt, cSig_ηlδx,
+        adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX, lωNX_vec)
 
     # for starting new
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
     S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
-    cSig_ηx, adapt) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    cSig_ηlδx, adapt) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
         S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
-        0, zeros(Int, length(lω)), cSig_ηx,
+        0, zeros(Int, length(lω)), cSig_ηlδx,
         adapt, 0,
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
-        zeros(Float64, 1, 1) )
+        zeros(Float64, 1, 1), zeros(Float64, 1) )
 
     # for starting new but not adapting
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
     S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
-    iter, accpt, cSig_ηx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    iter, accpt, cSig_ηlδx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
         S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
-        iter, accpt, cSig_ηx,
+        iter, accpt, cSig_ηlδx,
         false, nothing, nothing, nothing,
-        zeros(Float64, 1, 1))
+        zeros(Float64, 1, 1), zeros(Float64, 1))
 end
 
 struct Prior_DPmRegJoint
@@ -134,9 +134,38 @@ mutable struct Model_DPmRegJoint
     H::Int # DP truncation level
     prior::Prior_DPmRegJoint
 
+    indx_ηy::Dict
+    indx_ηx::Dict
+    indx_β_x::Union{Dict, Nothing}
+
     state::State_DPmRegJoint # this is the only thing that should change
 
-    Model_DPmRegJoint(y, X, H, prior, state) = new(y, X, length(y), size(X,2), H, prior, state)
+end
+function Model_DPmRegJoint(y::Array{Float64, 1}, X::Array{Float64, 2},
+    H::Int, prior::Prior_DPmRegJoint, state::State_DPmRegJoint)
+
+    n = length(y)
+    K = size(X, 2)
+
+    indx_ηy = Dict( :μ => 1, :β => 2:(K+1), :δ => K+2 )
+
+    if K > 1
+        indx_ηx = Dict( :μ => 1:K, :β => (K+1):Int(K*(K+1)/2), :δ => Int(K*(K+1)/2 + 1):Int(K*(K+1)/2 + K) )
+        indx_β_x = Dict()
+        ii = 1
+        jj = K - 1
+        for k = 1:(K-1)
+            indx_β_x[k] = Int(ii):Int(ii+jj-1)
+            ii += jj
+            jj -= 1
+        end
+    else
+        indx_ηx = Dict( :μ => 1:K, :δ => Int(K+1):Int(2*K) )
+        indx_β_x = nothing
+    end
+
+    return Model_DPmRegJoint(y, X, n, K, H, prior,
+        indx_ηy, indx_ηx, indx_β_x, state)
 end
 
 mutable struct PostSims_DPmRegJoint
@@ -209,4 +238,9 @@ PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int
 function lNXmat(X::Array{T, 2}, μ::Array{T, 2}, β::Array{Array{T, 2}, 1}, δ::Array{T, 2}) where T <: Real
     hcat( [lNX_sqfChol( Matrix(X'), μ[h,:], [ β[k][h,:] for k = 1:(size(X,2)-1) ], δ[h,:] )
             for h = 1:size(μ, 1) ]...)
+end
+
+function lωNXvec(lω::Array{T, 1}, lNX_mat::Array{T, 1}) where T <: Real
+    lωNX_mat = broadcast(+, lω, lNX_mat') # H by n
+    BayesInference.logsumexp(lωNX_mat, 1) # n vector
 end

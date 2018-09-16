@@ -45,12 +45,15 @@ function lfc_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1},
 
     lω = v_to_lω(v)
 
-    lωNX_mat = broadcast(+, lω, lNX_mat') # H by n
+    lωNX_vec = lωNXvec(lω, lNX_mat)
 
-    ldx = BayesInference.logsumexp(lωNX_mat, 1) # n vector
+    ## replaced by lωXvec
+    # lωNX_mat = broadcast(+, lω, lNX_mat') # H by n
+    # lωNX_vec = BayesInference.logsumexp(lωNX_mat, 1) # n vector
+
     ldb = [ logpdf( Beta(a_v[h], b_v[h]), v[h] ) for h = 1:length(v) ]
 
-    return sum(ldb) - sum(ldx)
+    return sum(ldb) - sum(lωNX_vec), lωNX_vec
 end
 
 function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::Array{T, 2},
@@ -62,7 +65,7 @@ function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::
 
     ### Step A: Define the slice
 
-    lf0 = lfc_v(v, a_v, b_v, lNX_mat)
+    lf0, trash = lfc_v(v, a_v, b_v, lNX_mat)
     ee = rand(Exponential(1.0))
     zz = lf0 - ee
 
@@ -77,11 +80,12 @@ function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::
     keeptrying = true
     tries = 1
     cand = Array{T, 1}(undef, HH) # define outside scope of while loop
+    lωNX_vec_out = Array{T, 1}(undef, length(trash))
 
     while keeptrying
 
         cand = L .+ rand(HH) .* (R .- L)
-        lfcand = lfc_v(cand, a_v, b_v, lNX_mat)
+        lfcand, lωNX_vec_out = lfc_v(cand, a_v, b_v, lNX_mat)
 
         keeptrying = zz > lfcand
 
@@ -103,7 +107,7 @@ function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::
 
     end
 
-    return cand
+    return cand, lωNX_vec_out
 end
 
 function update_vlω_mvSlice!(model::Model_DPmRegJoint) where T <: Real
@@ -112,11 +116,12 @@ function update_vlω_mvSlice!(model::Model_DPmRegJoint) where T <: Real
     a_v = 1.0 .+ M[1:(model.H-1)]
     b_v = reverse( model.state.α .+ cumsum( reverse( M[2:model.H] ) ) )
 
-    v_new = mvSlice_v(model.state.v, a_v, b_v, model.state.lNX)
+    v_new, lωNX_vec_new = mvSlice_v(model.state.v, a_v, b_v, model.state.lNX)
     lω_new = v_to_lω(v_new)
 
     model.state.v = v_new
     model.state.lω = lω_new
+    model.state.lωNX_vec = lωNX_vec_new
 
     return nothing
 end

@@ -22,6 +22,7 @@ function mcmc_DPmRegJoint!(model::Mod_DPmRegJoint, n_keep::Int,
 
     yX = hcat(y, X) # useful for allocation update
     model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
+    model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
 
     ## sampling
     for i in 1:n_keep
