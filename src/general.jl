@@ -21,8 +21,8 @@ mutable struct State_DPmRegJoint
     α::Float64
 
     # G0
-    β0_ηy::Array{Float64, 1}    # K+1 vector
-    Λ0_ηy::PDMat{Float64}       # K+1 by K+1 precision matrix
+    β0star_ηy::Array{Float64, 1}    # K+1 vector
+    Λ0star_ηy::PDMat{Float64}       # K+1 by K+1 precision matrix
 
     ν_δy::Float64
     s0_δy::Float64
@@ -42,28 +42,28 @@ mutable struct State_DPmRegJoint
     cSig_ηlδx::Array{PDMat{Float64}, 1}
     adapt::Bool
     adapt_iter::Union{Int, Nothing}
-    runningsum_ηx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
-    runningSS_ηx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
+    runningsum_ηlδx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
+    runningSS_ηlδx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
     lNX::Array{Float64, 2} # n by H matrix of log(pdf(Normal(x_i))) under each obs i and allocation h
     lωNX_vec::Array{Float64, 1} # n vector with log( sum_j ωN(x_i) )
 
     # for coninuing an adapt phase
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-    S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
-    adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX, lωNX_vec) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-        S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+        S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
-        adapt, adapt_iter, runningsum_ηx, runningSS_ηx, lNX, lωNX_vec)
+        adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec)
 
     # for starting new
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-    S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     cSig_ηlδx, adapt) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-        S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         0, zeros(Int, length(lω)), cSig_ηlδx,
         adapt, 0,
@@ -74,10 +74,10 @@ mutable struct State_DPmRegJoint
 
     # for starting new but not adapting
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-    S, lω, α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-        S, lω, lω_to_v(lω), α, β0_ηy, Λ0_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
         false, nothing, nothing, nothing,
@@ -88,12 +88,12 @@ struct Prior_DPmRegJoint
     α_sh::Float64   # gamma shape
     α_rate::Float64 # gamma rate
 
-    β0_ηy_mean::Array{Float64, 1}   # MVN mean vector
-    β0_ηy_Cov::PDMat{Float64}       # MVN covariance matrix
-    β0_ηy_Prec::PDMat{Float64}      # MVN precision matrix
+    β0star_ηy_mean::Array{Float64, 1}   # MVN mean vector
+    β0star_ηy_Cov::PDMat{Float64}       # MVN covariance matrix
+    β0star_ηy_Prec::PDMat{Float64}      # MVN precision matrix
 
-    Λ0_ηy_df::Float64           # Wishart deg. of freedom
-    Λ0_ηy_S0::PDMat{Float64}    # Prior harmonic mean of Λ0inv; inverse scale of Wishart divided by deg. of freedom
+    Λ0star_ηy_df::Float64           # Wishart deg. of freedom
+    Λ0star_ηy_S0::PDMat{Float64}    # Prior harmonic mean of Λ0inv; inverse scale of Wishart divided by deg. of freedom
 
     s0_δy_df::Float64   # scaled inv. chi-square deg. of freedom
     s0_δy_s0::Float64   # scaled inv. chi-square harmonic mean
@@ -115,12 +115,12 @@ struct Prior_DPmRegJoint
     s0_δx_df::Array{Float64, 1}   # vector of scaled inv. chi-square deg. of freedom
     s0_δx_s0::Array{Float64, 1}   # vector of scaled inv. chi-square harmonic mean
 
-    Prior_DPmRegJoint(α_sh, α_rate, β0_ηy_mean, β0_ηy_Cov,
-    Λ0_ηy_df, Λ0_ηy_S0, s0_δy_df, s0_δy_s0,
+    Prior_DPmRegJoint(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov,
+    Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov, Λ0_βx_df, Λ0_βx_S0,
-    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, β0_ηy_mean, β0_ηy_Cov, inv(β0_ηy_Cov),
-    Λ0_ηy_df, Λ0_ηy_S0, s0_δy_df, s0_δy_s0,
+    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov, inv(β0star_ηy_Cov),
+    Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, inv(μ0_μx_Cov), Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov, [inv(β0_βx_Cov[k]) for k = 1:length(β0_βx_Cov)], Λ0_βx_df, Λ0_βx_S0,
     s0_δx_df, s0_δx_s0)
@@ -184,8 +184,8 @@ mutable struct PostSims_DPmRegJoint
     S::Array{<:Integer, 2}      # nsim by n matrix
 
     # G0
-    β0_ηy::Array{<:Real, 2}    # nsim by K+1 matrix
-    Λ0_ηy::Array{<:Real, 2}    # nsim by length(vech) matrix
+    β0star_ηy::Array{<:Real, 2}    # nsim by K+1 matrix
+    Λ0star_ηy::Array{<:Real, 2}    # nsim by length(vech) matrix
 
     ν_δy::Array{<:Real, 1}     # nsim vector
     s0_δy::Array{<:Real, 1}    # nsim vector
@@ -201,10 +201,10 @@ mutable struct PostSims_DPmRegJoint
 
 PostSims_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
 lω, α, S,
-β0_ηy, Λ0_ηy, ν_δy, s0_δy,
+β0star_ηy, Λ0star_ηy, ν_δy, s0_δy,
 μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
 lω, α, S,
-β0_ηy, Λ0_ηy, ν_δy, s0_δy,
+β0star_ηy, Λ0star_ηy, ν_δy, s0_δy,
 μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx)
 end
 
@@ -224,8 +224,8 @@ PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int
 (m.ηlω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # lω
 (m.ηlω ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # α
 (m.S ? Array{samptypes[2], 2}(undef, n_keep, n) : Array{samptypes[2], 2}(undef, 0, 0)), # S
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K+1) : Array{samptypes[1], 2}(undef, 0, 0)), # β0_ηy
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, (K+1)*(K+2)/2) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0_ηy
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K+1) : Array{samptypes[1], 2}(undef, 0, 0)), # β0star_ηy
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, (K+1)*(K+2)/2) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0star_ηy
 (m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # ν_δy
 (m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # s0_δy
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # μ0_μx
@@ -240,7 +240,15 @@ function lNXmat(X::Array{T, 2}, μ::Array{T, 2}, β::Array{Array{T, 2}, 1}, δ::
             for h = 1:size(μ, 1) ]...)
 end
 
-function lωNXvec(lω::Array{T, 1}, lNX_mat::Array{T, 1}) where T <: Real
+function lωNXvec(lω::Array{T, 1}, lNX_mat::Array{T, 2}) where T <: Real
     lωNX_mat = broadcast(+, lω, lNX_mat') # H by n
-    BayesInference.logsumexp(lωNX_mat, 1) # n vector
+    vec( BayesInference.logsumexp(lωNX_mat, 1) ) # n vector
+end
+
+function reset_adapt!(model::Model_DPmRegJoint)
+    model.state.adapt_iter = 0
+    ncov = Int(model.K + model.K*(model.K+1)/2)
+    model.state.runningsum_ηlδx = zeros( Float64, model.H, ncov )
+    model.state.runningSS_ηlδx = zeros( Float64, model.H, ncov, ncov )
+    return nothing
 end

@@ -4,6 +4,9 @@ using Test
 # @test hello("Julia") == "Hello, Julia"
 # @test domath(2.0) ≈ 7.0
 
+@test mean(InverseGamma(2.0, 2.0)) ≈ 1.0 # make sure they don't change parameterization
+@test mean(Gamma(2.0, 2.0)) ≈ 4.0 # make sure they don't change parameterization
+
 n = 100
 K = 5
 H = 25
@@ -15,8 +18,8 @@ prior = Prior_DPmRegJoint(1.0, # α_sh
 1.0, # α_rate
 randn(K+1), # β0_ηy_mean
 PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # β0_ηy_Cov
-2.0*K, # Λ0_ηy_df
-PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # Λ0_ηy_S0
+2.0*K, # Λ0star_ηy_df
+PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # Λ0star_ηy_S0
 5.0, # s0_δy_df
 1.0, # s0_δy_s0
 randn(K+1), # μ0_μx_mean
@@ -40,7 +43,7 @@ exp.(randn(H, K)), # δ_x,
 rDirichlet(ones(H), true), # lω,
 1.0, # α,
 randn(K+1), # β0_ηy,
-PDMat(Matrix(Diagonal(ones(K+1)))), # Λ0_ηy,
+PDMat(Matrix(Diagonal(ones(K+1)))), # Λ0star_ηy,
 5.0, # ν_δy,
 1.0, # s0_δy,
 randn(K), # μ0_μx,
@@ -50,7 +53,7 @@ PDMat(Matrix(Diagonal(ones(K)))), # Λ0_μx,
 fill(5.0, K), # ν_δx,
 ones(K), # s0_δx
 [ PDMat(Matrix(Diagonal(fill(0.5, Int(K + K*(K+1)/2))))) for h = 1:H ], # cSig_ηx,
-false # adapt
+true # adapt
 )
 
 
@@ -63,8 +66,9 @@ state # state
 
 model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
 @time lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
+model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
 
-update_alloc!(model, hcat(model.y, model.X))
+@time update_alloc!(model, hcat(model.y, model.X))
 
 ω_start = [0.2, 0.3, 0.25, 0.15, 0.10]
 v = lω_to_v(log.(ω_start))
@@ -75,4 +79,10 @@ for i = 1:1000
 end
 exp.(lω) ≈ ω_start
 
-update_vlω_mvSlice!(model)
+@time update_vlω_mvSlice!(model)
+
+Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
+βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
+
+h = 7
+@time update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy)

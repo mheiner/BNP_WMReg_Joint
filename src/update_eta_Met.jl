@@ -4,41 +4,40 @@
 
 
 
-# pre_compute Λ0_ηy*β0_ηy and β0_ηy'Λ0_ηy*β0_ηy which are not indexed by h
-function update_η_h_Met!(model::Mod_DPmRegJoint, h::Int, Λβ0_ηy::Array{T,1}, βΛβ0_ηy::T) where T <: Real
+# pre_compute Λ0star_ηy*β0star_ηy and β0star_ηy'Λ0star_ηy*β0star_ηy which are not indexed by h
+function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
 
     indx_h = findall(model.state.S.==h)
     n_h = length(indx_h)
 
-    y_h = model.y[indx_h] # doesn't need to copy if indexing (result of call to getindex)
-    X_h = model.X[indx_h,:]
-
-    β_x_h_old = [ model.state.β_x[k][h,:] for k = 1:model.K ]
+    μ_x_h_old = model.state.μ_x[h,:]
+    β_x_h_old = [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ]
     lδ_x_h_old = log.(model.state.δ_x[h,:])
-    ηlδ_x_old = vcat(model.state.μ_x[h,:],
+    ηlδ_x_old = vcat(μ_x_h_old,
                    vcat(β_x_h_old...),
                    lδ_x_h_old)
 
     ## Draw candidate for η_x
-    ηlδ_x_cand = ηlδ_x_old + rand(MvNormal(model.cSig_ηlδx[h])))
+    ηlδ_x_cand = ηlδ_x_old + rand(MvNormal(model.state.cSig_ηlδx[h]))
     μ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:μ]]
     β_x_h_candvec = ηlδ_x_cand[model.indx_ηx[:β]]
     β_x_h_cand = [ β_x_h_candvec[model.indx_β_x[k]] for k = 1:(model.K-1) ]
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
+    ## Compute lωNX_vec for candidate
+    lNX_mat_cand = copy(model.state.lNX)
+    lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, β_x_h_cand, δ_x_h_cand )
+    lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+
     if n_h == 0
 
         ## Metropolis step for η_x
 
-            ## Compute lωNX_vec for candidate
-            lNX_cand = lNXmat( model.X, μ_x_h_cand, β_x_h_cand, δ_x_h_cand )
-            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_cand) # n vector
-
             ## Compute acceptance ratio
-            lar = lG0_ηx(μ_x_h_cand, β_x_h_cand, lδ_x_h_cand, model.state) -
+            lar = lG0_ηlδx(μ_x_h_cand, β_x_h_cand, lδ_x_h_cand, model.state) -
                     sum(lωNX_vec_cand) -
-                    lG0_ηx(model.state.μ_x[h,:], β_x_h_old, lδ_x_h_old, model.state) +
+                    lG0_ηlδx(model.state.μ_x[h,:], β_x_h_old, lδ_x_h_old, model.state) +
                     sum(model.state.lωNX_vec)
 
             ## Decision and update
@@ -50,39 +49,59 @@ function update_η_h_Met!(model::Mod_DPmRegJoint, h::Int, Λβ0_ηy::Array{T,1},
                 end
                 model.state.δ_x[h,:] = δ_x_h_cand
 
+                model.state.lNX[:,h] = lNX_mat_cand[:,h]
+                model.state.lωNX_vec = copy(lωNX_vec_cand)
+
+                ηlδ_x_out = ηlδ_x_cand
                 model.state.accpt[h] += 1
 
-                ## G0 draw η_y ( use prec. prameterization )
-
-
             else # reject
-
-
-                ## Full conditional draw for η_y
-
-
-
+                ηlδ_x_out = ηlδ_x_old
             end
 
-    else
+            ## Full conditional draw (from G0) for η_y
+
+            model.state.δ_y[h] = rand(InverseGamma(0.5*model.state.ν_δy,
+                                        0.5*model.state.ν_δy*model.state.s0_δy))
+            βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.L * randn((model.K+1)) / sqrt(model.state.δ_y[h]))
+            model.state.μ_y[h] = βstar_ηy[model.indx_ηy[:μ]]
+            model.state.β_y[h,:] = βstar_ηy[model.indx_ηy[:β]]
+
+    else # some observations are assigned to cluster h (i.e., n_h > 0)
 
         ## Metropolis step for η_x
 
+            ## Candidate, lNX, lωNXvec, previously computed
             ## Important quantities
-            D_h = construct_Dh(h, X_h, model.state.μ_x[h,:])
 
-            Λ1_ηy_h = PDMat(D_h'D_h + model.state.Λ0_ηy)
-            β1_ηy_h = Λ1_ηy_h \ (Λβ0_ηy + D_h'y_h)
+            y_h = model.y[indx_h] # doesn't need to copy if indexing (result of call to getindex)
+            X_h = model.X[indx_h,:]
+            D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:])
 
-            a1_δy = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-            b1_δy = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                                y_h'y_h + βΛβ0_ηy - β1_ηy_h'Λ1_ηy_h*β1_ηy_h ) # posterior IG scale
+            Λ1star_ηy_h_old = PDMat(D_h_old'D_h_old + model.state.Λ0star_ηy)
+            β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
 
-            ## Compute lωNX_vec, other quantities for candidate
+            a1_δy_old = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
+            b1_δy_old = 0.5 * (model.state.ν_δy * model.state.s0_δy +
+                                y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
 
+            ## Important quantities for candidate
+            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand)
+
+            Λ1star_ηy_h_cand = PDMat(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
+            β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
+
+            a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
+            b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
+                                y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
 
             ## Compute acceptance ratio
-            lar = lcc_ηx() - lcc_ηx()
+            lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
+                model.state, μ_x_h_cand, β_x_h_cand, lδ_x_h_cand,
+                Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
+                lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
+                    model.state, μ_x_h_old, β_x_h_old, lδ_x_h_old,
+                    Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
 
             ## Decision and update
             if log(rand()) < lar # accept
@@ -93,24 +112,39 @@ function update_η_h_Met!(model::Mod_DPmRegJoint, h::Int, Λβ0_ηy::Array{T,1},
                 end
                 model.state.δ_x[h,:] = δ_x_h_cand
 
+                model.state.lNX[:,h] = lNX_mat_cand[:,h]
+                model.state.lωNX_vec = copy(lωNX_vec_cand)
+
+                ηlδ_x_out = ηlδ_x_cand
+                model.state.accpt[h] += 1
+
                 ## Full conditional draw for η_y ( use prec. prameterization )
 
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
+                βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.L * randn((model.K+1)) / sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = βstar_ηy[model.indx_ηy[:μ]]
+                model.state.β_y[h,:] = βstar_ηy[model.indx_ηy[:β]]
 
             else # reject
+
+                ηlδ_x_out = ηlδ_x_old
+
                 ## Full conditional draw for η_y
 
-
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
+                βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.L * randn((model.K+1)) / sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = βstar_ηy[model.indx_ηy[:μ]]
+                model.state.β_y[h,:] = βstar_ηy[model.indx_ηy[:β]]
 
             end
     end
 
-    ### REDO THIS TO JUST KEEP SAMPLES DURING ADAPTING
     if model.state.adapt
-        model.state.accpt_iter += 1
-        model.state.runningsum_ηx += ηlδ_x_cand
-        runningmean = model.state.runningsum_ηx / float(model.state.accpt_iter)
-        runningdev = ( ηlδ_x_cand - runningmean )
-        model.state.runningSS_ηx = runningdev * runningdev'
+        model.state.adapt_iter += 1
+        model.state.runningsum_ηlδx[h,:] += ηlδ_x_out
+        runningmean = model.state.runningsum_ηlδx[h,:] ./ float(model.state.adapt_iter)
+        runningdev = ( ηlδ_x_out - runningmean )
+        model.state.runningSS_ηlδx[h,:,:] = runningdev * runningdev' # the mean is changing, but this approx. is fine.
     end
 
     return nothing
@@ -122,43 +156,48 @@ function construct_Dh(h::Int, Xh::Array{T, 2}, μ_x_h::Array{T, 1}) where T <: R
     return hcat( ones(size(Xh,1)), D0 )
 end
 
-function lG0_ηx(μ::Array{T, 1}, β_x::Array{Array{T, 1}, 1}, lδ::Array{T, 1}, model.state) where T <: Real
-    Q3_μ = - 0.5 * PDMats.quad( model.state.Λ0_μx, (μ - model.state.μ0_μx) )
-    Q3_β = 0.0
-    Q3_δ = 0.0
-    for k = 1:(model.K - 1)
-        Q3_β -= 0.5 * PDMats.quad( model.state.Λ0_βx, (β_x[k] - model.state.β0_βx[k]) )
-        Q3_δ -= ( (0.5*model.state.ν_δx[k] + 1.0)*lδ[k] +
-                    0.5*model.state.ν_δx[k]*model.state.s0_δx[k]/exp(lδ[k]) )
-    end
-    Q3_δ -= ( (0.5*model.state.ν_δx[model.K] + 1.0)*lδ[model.K] +
-                0.5*model.state.ν_δx[model.K]*model.state.s0_δx[model.K]/exp(lδ[model.K]) )
+function lG0_ηlδx(μ_x::Array{T, 1}, β_x::Array{Array{T, 1}, 1}, lδ_x::Array{T, 1},
+                  state::State_DPmRegJoint) where T <: Real
 
-    Q3 = Q3_μ + Q3_β + Q3_δ
-    return Q3
+    K = length(μ_x)
+    Q_μ = - 0.5 * PDMats.quad( state.Λ0_μx, (μ_x - state.μ0_μx) )
+    Q_β = 0.0
+    Q_δ = 0.0
+    for k = 1:(K-1)
+        Q_β -= 0.5 * PDMats.quad( state.Λ0_βx[k], (β_x[k] - state.β0_βx[k]) )
+        Q_δ -= ( (0.5*state.ν_δx[k] + 1.0)*lδ_x[k] +
+                    0.5*state.ν_δx[k]*state.s0_δx[k]/exp(lδ_x[k]) )
+    end
+    Q_δ -= ( (0.5*state.ν_δx[K] + 1.0)*lδ_x[K] +
+                0.5*state.ν_δx[K]*state.s0_δx[K]/exp(lδ_x[K]) )
+
+    J = sum(lδ_x) # Jacobian for log(δ) transformation
+
+    Q = Q_μ + Q_β + Q_δ + J
+    return Q
 end
 
 
 ### log-collapsed conditional
-function lcc_ηx()
+function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_vec::Array{T, 1},
+    state::State_DPmRegJoint, μ_x_h::Array{T, 1}, β_x_h::Array{Array{T, 1}, 1}, lδ_x_h::Array{T, 1},
+    Λ1star_ηy_h::PDMat{T}, a1_δy::T, b1_δy::T) where T <: Real
 
     # Q1
-
+    Q1 = sum( lNX_mat[indx_h, h] )
 
     # Q2
+    Q2 = sum(lωNX_vec)
 
-
-    # Q3
-    Q3 = lG0_ηx(μ, β_x, δ, model.state)
+    # Q3 , G0 including Jacobian
+    Q3 = lG0_ηlδx(μ_x_h, β_x_h, lδ_x_h, state)
 
     # Q4
-
+    Q4 = logdet(Λ1star_ηy_h)
 
     # Q5
+    Q5 = log(b1_δy)
 
-
-    # Q6 # Jacobian
-
-    return Q1 - Q2 + Q3 - 0.5*Q4 - (a1_δy + n_h / 2.0)*Q5 + Q6
+    return Q1 - Q2 + Q3 - 0.5*Q4 - (a1_δy)*Q5
 
 end
