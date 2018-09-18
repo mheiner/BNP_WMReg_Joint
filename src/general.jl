@@ -85,7 +85,7 @@ mutable struct State_DPmRegJoint
         zeros(Float64, 1, 1), zeros(Float64, 1))
 end
 
-struct Prior_DPmRegJoint
+mutable struct Prior_DPmRegJoint
     α_sh::Float64   # gamma shape
     α_rate::Float64 # gamma rate
 
@@ -237,6 +237,14 @@ end
 
 mutable struct Monitor_DPmRegJoint
     ηlω::Bool
+    S::Bool
+    G0::Bool
+end
+
+mutable struct Updatevars_DPmRegJoint
+    η::Bool
+    lω::Bool
+    α::Bool
     S::Bool
     G0::Bool
 end

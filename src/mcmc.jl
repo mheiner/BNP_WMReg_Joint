@@ -7,6 +7,7 @@ mcmc_DPmRegJoint!(model, n_keep[, monitor, report_filename="out_progress.txt",
 thin=1, report_freq=10000, samptypes])
 """
 function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
+    updatevars::Updatevars_DPmRegJoint(true, true, true, true, true),
     monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false),
     report_filename::String="out_progress.txt", thin::Int=1,
     report_freq::Int=100, samptypes=(Float32, Int32))
@@ -28,17 +29,30 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     for i in 1:n_keep
         for j in 1:thin
 
-            Λβ0star_ηy = model.state.Λ0star_ηy*model.state.β0star_ηy
-            βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
-            for h = 1:model.H
-                update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+            if updatevars.η
+                Λβ0star_ηy = model.state.Λ0star_ηy*model.state.β0star_ηy
+                βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
+                for h = 1:model.H
+                    update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+                end
             end
-            update_alloc!(model, yX)
-            update_vlω_mvSlice!(model)
-            model.state.α = rand(BayesInference.post_alphaDP(model.H, model.state.lω[H],
-                                    model.prior.α_sh, model.prior.α_rate))
 
-            # update G0
+            if updatevars.S
+                update_alloc!(model, yX)
+            end
+
+            if updatevars.lω
+                update_vlω_mvSlice!(model)
+            end
+
+            if updatevars.α
+                model.state.α = rand(BayesInference.post_alphaDP(model.H, model.state.lω[H],
+                                        model.prior.α_sh, model.prior.α_rate))
+            end
+
+            if updatevars.G0
+
+            end
 
             model.state.iter += 1
             if model.state.iter % report_freq == 0
@@ -65,6 +79,7 @@ end
 
 
 function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_iter_scale::Int,
+    updatevars::Updatevars_DPmRegJoint,
     report_filename::String="out_progress.txt",
     maxtries::Int=100, accpt_bnds::Vector{T}=[0.23, 0.40], adjust::Vector{T}=[0.77, 1.3]) where T <: Real
 
@@ -83,8 +98,10 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         tries += 1
         tries <= maxtries || throw(error("Exceeded maximum adaptation attempts."))
 
-        sims, accpt = mcmc_DPmRegJoint!(model, n_iter_scale, Monitor_DPmRegJoint(false, false, false),
-                                        report_filename, 1, 100)
+        sims, accpt = mcmc_DPmRegJoint!(model, n_iter_scale,
+                            updatevars,
+                            Monitor_DPmRegJoint(false, false, false),
+                            report_filename, 1, 100)
 
         for h = 1:H
             fails[h] = (accpt[h] < accpt_bnds[1])
@@ -101,7 +118,8 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     reset_adapt!(model)
     model.state.adapt = true
 
-    sims, accpt = mcmc_DPmRegJoint!(model, n_iter_collect, Monitor_DPmRegJoint(false, false, false),
+    sims, accpt = mcmc_DPmRegJoint!(model, n_iter_collect, updatevars,
+                            Monitor_DPmRegJoint(false, false, false),
                                     report_filename, 1, 100)
 
     for h = 1:H
@@ -121,8 +139,9 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         tries += 1
         tries <= maxtries || throw(error("Exceeded maximum adaptation attempts."))
 
-        sims, accpt = mcmc_DPmRegJoint!(model, n_iter_scale, Monitor_DPmRegJoint(false, false, false),
-                                        report_filename, 1, 100)
+        sims, accpt = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
+                                Monitor_DPmRegJoint(false, false, false),
+                                report_filename, 1, 100)
 
         for h = 1:H
             too_low = accpt_rate[h] < accpt_bnds[1]
