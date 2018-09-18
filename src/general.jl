@@ -138,7 +138,7 @@ function Prior_DPmRegJoint(K::Int, H::Int)
     PDMat(Matrix(Diagonal(fill(1.0, K+1)))), # Λ0star_ηy_S0
     5.0, # s0_δy_df
     1.0, # s0_δy_s0
-    zeros(K+1), # μ0_μx_mean
+    zeros(K), # μ0_μx_mean
     PDMat(Matrix(Diagonal(fill(1.0, K)))), # μ0_μx_Cov
     1.0*(K+2), # Λ0_μx_df
     PDMat(Matrix(Diagonal(fill(1.0, K)))), # Λ0_μx_S0
@@ -289,24 +289,27 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         ν_δx = fill(5.0, K)
         Λ0_βx = [ prior.Λ0_βx_S0[k] for k = 1:(K-1) ]
         β0_βx = [ prior.β0_βx_mean[k] for k = 1:(K-1) ]
-        Λ0_μx = copy(prior.Λ0_μx_S0)
+        Λ0_μx = 1.0*prior.Λ0_μx_S0
         μ0_μx = copy(prior.μ0_μx_mean)
         s0_δy = copy(prior.s0_δy_s0)
         ν_δy = 5.0
-        Λ0star_ηy = copy(prior.Λ0star_ηy_S0)
+        Λ0star_ηy = 1.0*prior.Λ0star_ηy_S0
         β0star_ηy = copy(prior.β0star_ηy_mean)
         α = prior.α_sh / prior.α_rate
-        lω = log.(fill(1.0 / H))
+        lω = log.(fill(1.0 / H, H))
         S = [ sample(Weights(ones(H))) for i = 1:n ]
-        δ_x = copy(s0_δx)
-        β_x = copy(β0_βx)
-        μ_x = copy(μ0_μx)
-        δ_y = copy(s0_δy)
-        β_y = β0star_ηy[2:(K+1)]
-        μ_y = β0star_ηy[1]
+
+        δ_x = vcat([ copy(s0_δx) for h = 1:H ]'...)
+
+        β_x = [ vcat( [copy(β0_βx[k]) for h = 1:H]'... ) for k = (K-1):-1:1 ]
+
+        μ_x = vcat([ copy(μ0_μx) for h = 1:H ]'...)
+        δ_y = fill(s0_δy, H)
+        β_y = vcat([ β0star_ηy[2:(K+1)] for h = 1:H ]'...)
+        μ_y = fill(β0star_ηy[1], H)
     end
 
-    cSig_ηlδx = PDMat(Matrix(Diagonal(fill(1.0, Int(K+K*(K+1)/2)))))
+    cSig_ηlδx = [ PDMat(Matrix(Diagonal(fill(1.0, Int(K+K*(K+1)/2))))) for h = 1:H ]
     adapt = false
 
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,

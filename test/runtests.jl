@@ -22,7 +22,7 @@ PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # β0star_ηy_Cov
 PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # Λ0star_ηy_S0
 5.0, # s0_δy_df
 1.0, # s0_δy_s0
-randn(K+1), # μ0_μx_mean
+randn(K), # μ0_μx_mean
 PDMat(Matrix(Diagonal(fill(10.0, K)))), # μ0_μx_Cov
 2.0*K, # Λ0_μx_df
 PDMat(Matrix(Diagonal(fill(10.0, K)))), # Λ0_μx_S0
