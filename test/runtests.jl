@@ -7,9 +7,9 @@ using Test
 @test mean(InverseGamma(2.0, 2.0)) ≈ 1.0 # make sure they don't change parameterization
 @test mean(Gamma(2.0, 2.0)) ≈ 4.0 # make sure they don't change parameterization
 
-n = 100
-K = 5
-H = 25
+n = 500
+K = 10
+H = 50
 
 y = randn(n)
 X = randn(n, K)
@@ -86,3 +86,12 @@ exp.(lω) ≈ ω_start
 
 h = 7
 @time update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+
+@time mcmc_DPmRegJoint!(model, 200, Monitor_DPmRegJoint(false, false, false), "out_progress.txt", 1, 10)
+rm("out_progress.txt")
+
+println(model.state.iter)
+println(model.state.accpt / float(model.state.iter))
+println(counts(model.state.S, 1:model.H))
+println(exp.(model.state.lω))
+println(model.state.α)
