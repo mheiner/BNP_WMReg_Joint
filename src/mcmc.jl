@@ -14,7 +14,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 
     ## output files
     report_file = open(report_filename, "a+")
-    write(report_file, "Commencing MCMC at $(Dates.now()()) for $(n_keep * thin) iterations.\n")
+    write(report_file, "Commencing MCMC at $(Dates.now()) for $(n_keep * thin) iterations.\n")
 
     sims = PostSims_DPmRegJoint(monitor, n_keep, model.n, model.K, model.H, samptypes)
     start_accpt = copy(model.state.accpt)
@@ -56,7 +56,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 
             model.state.iter += 1
             if model.state.iter % report_freq == 0
-                write(report_file, "Iter $(model.state.iter) at $(Dates.now()())\n")
+                write(report_file, "Iter $(model.state.iter) at $(Dates.now())\n")
                 write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n\n")
                 prev_accpt = copy(model.state.accpt)
             end
@@ -116,7 +116,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     collect_scale = 2.38^2 / float((model.K + model.K*(model.K+1)/2))
 
     ## initial runs
-    write(report_file, "Beginning Adaptation Phase 1 of 3 (initial scaling) at $(Dates.now()())\n")
+    write(report_file, "Beginning Adaptation Phase 1 of 3 (initial scaling) at $(Dates.now())\n")
 
     model.state.adapt = false
     reset_adapt!(model)
@@ -143,7 +143,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     end
 
     ## cΣ collection
-    write(report_file, "Beginning Adaptation Phase 2 of 3 (covariance collection) at $(Dates.now()())\n")
+    write(report_file, "Beginning Adaptation Phase 2 of 3 (covariance collection) at $(Dates.now())\n")
 
     reset_adapt!(model)
     model.state.adapt = true
@@ -157,7 +157,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     end
 
     ## final scaling
-    write(report_file, "Beginning Adaptation Phase 3 of 3 (final scaling) at $(Dates.now()())\n")
+    write(report_file, "Beginning Adaptation Phase 3 of 3 (final scaling) at $(Dates.now())\n")
 
     model.state.adapt = false
     reset_adapt!(model)
@@ -188,7 +188,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
     end
 
-    write(report_file, "Beginning Adaptation Phase 3 of 3 (final scaling) at $(Dates.now()())\n")
+    write(report_file, "Beginning Adaptation Phase 3 of 3 (final scaling) at $(Dates.now())\n")
     reset_adapt!(model)
     model.state.adapt = true
 
