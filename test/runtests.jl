@@ -16,8 +16,8 @@ X = randn(n, K)
 
 prior = Prior_DPmRegJoint(1.0, # α_sh
 1.0, # α_rate
-randn(K+1), # β0_ηy_mean
-PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # β0_ηy_Cov
+randn(K+1), # β0star_ηy_mean
+PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # β0star_ηy_Cov
 2.0*K, # Λ0star_ηy_df
 PDMat(Matrix(Diagonal(fill(10.0, K+1)))), # Λ0star_ηy_S0
 5.0, # s0_δy_df
@@ -42,7 +42,7 @@ exp.(randn(H, K)), # δ_x,
 [ sample(Weights(ones(H))) for i = 1:n ], # S,
 rDirichlet(ones(H), true), # lω,
 1.0, # α,
-randn(K+1), # β0_ηy,
+randn(K+1), # β0star_ηy,
 PDMat(Matrix(Diagonal(ones(K+1)))), # Λ0star_ηy,
 5.0, # ν_δy,
 1.0, # s0_δy,
