@@ -2,7 +2,8 @@
 
 export State_DPmRegJoint, init_state_DPmRegJoint,
     Prior_DPmRegJoint, Model_DPmRegJoint,
-    Monitor_DPmRegJoint, PostSims_DPmRegJoint, compute_lNX, reset_adapt!;
+    Monitor_DPmRegJoint, Updatevars_DPmRegJoint,
+    PostSims_DPmRegJoint, compute_lNX, reset_adapt!;
 
 mutable struct State_DPmRegJoint
 
