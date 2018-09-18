@@ -85,41 +85,6 @@ mutable struct State_DPmRegJoint
         zeros(Float64, 1, 1), zeros(Float64, 1))
 end
 
-function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
-    prior::Prior_DPmRegJoint, random::Bool=false)
-
-    if random
-    else
-        s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
-        ν_δx = fill(5.0, K)
-        Λ0_βx = [ prior.Λ0_βx_S0[k] for k = 1:K ]
-        β0_βx = [ prior.β0_βx_mean for k = 1:K ]
-        Λ0_μx = copy(prior.Λ0_μx_S0)
-        μ0_μx = copy(prior.μ0_μx_mean)
-        s0_δy = copy(prior.s0_δy_s0)
-        ν_δy = 5.0
-        Λ0star_ηy = copy(prior.Λ0star_ηy_S0)
-        β0star_ηy = copy(prior.β0star_ηy_mean)
-        α = prior.α_sh / prior.α_rate
-        lω = log.(fill(1.0 / H))
-        S = [ sample(Weights(ones(H))) for i = 1:n ]
-        δ_x = copy(s0_δx)
-        β_x = copy(β0_βx)
-        μ_x = copy(μ0_μx)
-        δ_y = copy(s0_δy)
-        β_y = β0star_ηy[2:(K+1)]
-        μ_y = β0star_ηy[1]
-    end
-
-    cSig_ηlδx = PDMat(Matrix(Diagonal(fill(1.0, Int(K+K*(K+1)/2)))))
-    adapt = false
-
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-        S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
-        β0_βx, Λ0_βx, ν_δx, s0_δx,
-        cSig_ηlδx, adapt)
-end
-
 struct Prior_DPmRegJoint
     α_sh::Float64   # gamma shape
     α_rate::Float64 # gamma rate
@@ -313,4 +278,39 @@ function reset_adapt!(model::Model_DPmRegJoint)
     model.state.runningsum_ηlδx = zeros( Float64, model.H, ncov )
     model.state.runningSS_ηlδx = zeros( Float64, model.H, ncov, ncov )
     return nothing
+end
+
+function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
+    prior::Prior_DPmRegJoint, random::Bool=false)
+
+    if random
+    else
+        s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
+        ν_δx = fill(5.0, K)
+        Λ0_βx = [ prior.Λ0_βx_S0[k] for k = 1:K ]
+        β0_βx = [ prior.β0_βx_mean for k = 1:K ]
+        Λ0_μx = copy(prior.Λ0_μx_S0)
+        μ0_μx = copy(prior.μ0_μx_mean)
+        s0_δy = copy(prior.s0_δy_s0)
+        ν_δy = 5.0
+        Λ0star_ηy = copy(prior.Λ0star_ηy_S0)
+        β0star_ηy = copy(prior.β0star_ηy_mean)
+        α = prior.α_sh / prior.α_rate
+        lω = log.(fill(1.0 / H))
+        S = [ sample(Weights(ones(H))) for i = 1:n ]
+        δ_x = copy(s0_δx)
+        β_x = copy(β0_βx)
+        μ_x = copy(μ0_μx)
+        δ_y = copy(s0_δy)
+        β_y = β0star_ηy[2:(K+1)]
+        μ_y = β0star_ηy[1]
+    end
+
+    cSig_ηlδx = PDMat(Matrix(Diagonal(fill(1.0, Int(K+K*(K+1)/2)))))
+    adapt = false
+
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+        S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        β0_βx, Λ0_βx, ν_δx, s0_δx,
+        cSig_ηlδx, adapt)
 end
