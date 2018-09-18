@@ -7,7 +7,7 @@ mcmc_DPmRegJoint!(model, n_keep[, monitor, report_filename="out_progress.txt",
 thin=1, report_freq=10000, samptypes])
 """
 function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
-    updatevars::Updatevars_DPmRegJoint(true, true, true, true, true),
+    updatevars::Updatevars_DPmRegJoint=Updatevars_DPmRegJoint(true, true, true, true, true),
     monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false),
     report_filename::String="out_progress.txt", thin::Int=1,
     report_freq::Int=100, samptypes=(Float32, Int32))
