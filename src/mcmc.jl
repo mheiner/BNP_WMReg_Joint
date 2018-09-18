@@ -21,7 +21,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     start_iter = copy(model.state.iter)
     prev_accpt = copy(model.state.accpt) # set every report_freq iterations
 
-    yX = hcat(y, X) # useful for allocation update
+    yX = hcat(model.y, model.X) # useful for allocation update
     model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
     model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
 
@@ -63,43 +63,43 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
         end
 
         if monitor.ηlω
-            μ_y[i,:] = Array{samptypes[1]}(model.state.μ_y)  # nsim by H matrix
-            β_y[i,:,:] = Array{samptypes[1]}(model.state.β_y) # nsim by H by K array
-            δ_y[i,:] = Array{samptypes[1]}(model.state.δ_y)  # nsim by H matrix
-            μ_x[i,:,:] = Array{samptypes[1]}(model.state.μ_x)  # nsim by H by K array
+            sims.μ_y[i,:] = Array{samptypes[1]}(model.state.μ_y)  # nsim by H matrix
+            sims.β_y[i,:,:] = Array{samptypes[1]}(model.state.β_y) # nsim by H by K array
+            sims.δ_y[i,:] = Array{samptypes[1]}(model.state.δ_y)  # nsim by H matrix
+            sims.μ_x[i,:,:] = Array{samptypes[1]}(model.state.μ_x)  # nsim by H by K array
             if model.K > 1
                 for k = 1:(model.K-1)
-                    β_x[k][i,:,:] = Array{samptypes[1]}(model.state.β_x[k])   # vector of nsim by H by (k in (K-1):1) arrays
+                    sims.β_x[k][i,:,:] = Array{samptypes[1]}(model.state.β_x[k])   # vector of nsim by H by (k in (K-1):1) arrays
                 end
             end
-            δ_x[i,:,:] = Array{samptypes[1]}(model.state.δ_x)   # nsim by H by K array
-            lω[i,:] = Array{samptypes[1]}(model.state.lω)   # nsim by H matrix
-            α[i] = float(samptypes[1])(model.state.α)    # nsim vector
+            sims.δ_x[i,:,:] = Array{samptypes[1]}(model.state.δ_x)   # nsim by H by K array
+            sims.lω[i,:] = Array{samptypes[1]}(model.state.lω)   # nsim by H matrix
+            sims.α[i] = float(samptypes[1])(model.state.α)    # nsim vector
         end
 
         if monitor.S
-            S[i,:] = Array{samptypes[2]}(model.state.S)     # nsim by n matrix
+            sims.S[i,:] = Array{samptypes[2]}(model.state.S)     # nsim by n matrix
         end
 
         if monitor.G0
-            β0star_ηy[i,:] = Array{samptypes[1]}(model.state.β0star_ηy)    # nsim by K+1 matrix
-            Λ0star_ηy[i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0star_ηy), true))    # nsim by length(vech) matrix
+            sims.β0star_ηy[i,:] = Array{samptypes[1]}(model.state.β0star_ηy)    # nsim by K+1 matrix
+            sims.Λ0star_ηy[i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0star_ηy), true))    # nsim by length(vech) matrix
 
-            ν_δy[i] = float(samptypes[1])(model.state.ν_δy)    # nsim vector; THIS IS ACTUALLY A FIXED QUANTITY
-            s0_δy[i] = float(samptypes[1])(model.state.s0_δy)    # nsim vector
+            sims.ν_δy[i] = float(samptypes[1])(model.state.ν_δy)    # nsim vector; THIS IS ACTUALLY A FIXED QUANTITY
+            sims.s0_δy[i] = float(samptypes[1])(model.state.s0_δy)    # nsim vector
 
-            μ0_μx[i,:] = Array{samptypes[1]}(model.state.μ0_μx)    # nsim by K matrix
-            Λ0_μx[i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0_μx), true))     # nsim by length(vech) matrix
+            sims.μ0_μx[i,:] = Array{samptypes[1]}(model.state.μ0_μx)    # nsim by K matrix
+            sims.Λ0_μx[i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0_μx), true))     # nsim by length(vech) matrix
 
             if model.K > 1
                 for k = 1:(model.K-1)
-                    β0_βx[k][i,:] = Array{samptypes[1]}(model.state.β0_βx[k])  # vector of nsim by (k in (K-1):1) matrices
-                    Λ0_βx[k][i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0_βx[k]), true))  # vector of nsim by length(vech) matrices
+                    sims.β0_βx[k][i,:] = Array{samptypes[1]}(model.state.β0_βx[k])  # vector of nsim by (k in (K-1):1) matrices
+                    sims.Λ0_βx[k][i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0_βx[k]), true))  # vector of nsim by length(vech) matrices
                 end
             end
 
-            ν_δx[i,:] = Array{samptypes[1]}(model.state.ν_δx)     # nsim by K matrix; THIS IS ACTUALLY A FIXED QUANTITY
-            s0_δx[i,:] = Array{samptypes[1]}(model.state.s0_δx)    # nsim by K matrix
+            sims.ν_δx[i,:] = Array{samptypes[1]}(model.state.ν_δx)     # nsim by K matrix; THIS IS ACTUALLY A FIXED QUANTITY
+            sims.s0_δx[i,:] = Array{samptypes[1]}(model.state.s0_δx)    # nsim by K matrix
         end
     end
 
