@@ -8,3 +8,4 @@ SpecialFunctions
 Distributions
 PDMats
 StatsBase
+BayesInference
