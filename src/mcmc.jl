@@ -46,7 +46,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
             end
 
             if updatevars.α
-                model.state.α = rand(BayesInference.post_alphaDP(model.H, model.state.lω[H],
+                model.state.α = rand(BayesInference.post_alphaDP(model.H, model.state.lω[model.H],
                                         model.prior.α_sh, model.prior.α_rate))
             end
 
