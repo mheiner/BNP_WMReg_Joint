@@ -287,8 +287,8 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
     else
         s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
         ν_δx = fill(5.0, K)
-        Λ0_βx = [ prior.Λ0_βx_S0[k] for k = 1:K ]
-        β0_βx = [ prior.β0_βx_mean for k = 1:K ]
+        Λ0_βx = [ prior.Λ0_βx_S0[k] for k = 1:(K-1) ]
+        β0_βx = [ prior.β0_βx_mean[k] for k = 1:(K-1) ]
         Λ0_μx = copy(prior.Λ0_μx_S0)
         μ0_μx = copy(prior.μ0_μx_mean)
         s0_δy = copy(prior.s0_δy_s0)
