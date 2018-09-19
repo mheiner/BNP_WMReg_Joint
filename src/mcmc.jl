@@ -108,17 +108,18 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 end
 
 
+
 function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_iter_scale::Int,
     updatevars::Updatevars_DPmRegJoint,
     report_filename::String="out_progress.txt",
-    maxtries::Int=100, accpt_bnds::Vector{T}=[0.23, 0.40], adjust::Vector{T}=[0.77, 1.3]) where T <: Real
+    maxtries::Int=100, accptr_bnds::Vector{T}=[0.23, 0.35], adjust::Vector{T}=[0.77, 1.3]) where T <: Real
 
     d = Int((model.K + model.K*(model.K+1)/2))
     collect_scale = 2.38^2 / float(d)
 
     ## initial runs
     report_file = open(report_filename, "a+")
-    write(report_file, "Beginning Adaptation Phase 1 of 3 (initial scaling) at $(Dates.now())\n")
+    write(report_file, "Beginning Adaptation Phase 1 of 4 (initial scaling) at $(Dates.now())\n")
 
     model.state.adapt = false
     reset_adapt!(model)
@@ -130,38 +131,90 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         tries += 1
         tries <= maxtries || throw(error("Exceeded maximum adaptation attempts."))
 
-        sims, accpt = mcmc_DPmRegJoint!(model, n_iter_scale,
+        sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale,
                             updatevars,
                             Monitor_DPmRegJoint(false, false, false),
                             report_filename, 1, 100)
 
         for h = 1:model.H
-            fails[h] = (accpt[h] < accpt_bnds[1])
+            fails[h] = (accptr[h] < accptr_bnds[1])
             if fails[h]
-                model.state.cSig_ηlδx[h,:,:] = model.state.cSig_ηlδx[h,:,:] .* adjust[1]
+                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] .* adjust[1]
             end
         end
 
     end
 
+
+    ## local scaling
+    report_file = open(report_filename, "a+")
+    write(report_file, "Beginning Adaptation Phase 2 of 4 (local scaling) at $(Dates.now())\n")
+
+    model.state.adapt = false
+    reset_adapt!(model)
+
+    for ii = 1:3
+
+        for group in keys(model.indx_ηx)
+            # println(model.indx_ηx[group])
+            # end
+
+            ig = model.indx_ηx[group]
+
+            tries = 0
+            fails = trues(model.H)
+            while any(fails)
+                tries += 1
+                tries <= maxtries || throw(error("Exceeded maximum adaptation attempts."))
+
+                sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
+                Monitor_DPmRegJoint(false, false, false),
+                report_filename, 1, 100)
+
+                for h = 1:model.H
+                    too_low = accptr[h] < (accptr_bnds[1] * 0.5)
+                    too_high = accptr[h] > (accptr_bnds[2] * 0.75)
+
+                    if too_low
+                        tmp = Matrix(model.state.cSig_ηlδx[h])
+                        tmp[ig,ig] = tmp[ig,ig] .* adjust[1]
+                        model.state.cSig_ηlδx[h] = PDMat(tmp)
+                    elseif too_high
+                        tmp = Matrix(model.state.cSig_ηlδx[h])
+                        tmp[ig,ig] = tmp[ig,ig] .* adjust[2]
+                        model.state.cSig_ηlδx[h] = PDMat(tmp)
+                    else
+                        fails[h] = false
+                    end
+                end
+
+            end
+
+        end
+    end
+
+
     ## cΣ collection
-    write(report_file, "Beginning Adaptation Phase 2 of 3 (covariance collection) at $(Dates.now())\n")
+    report_file = open(report_filename, "a+")
+    write(report_file, "Beginning Adaptation Phase 3 of 4 (covariance collection) at $(Dates.now())\n")
 
     reset_adapt!(model)
     model.state.adapt = true
 
-    sims, accpt = mcmc_DPmRegJoint!(model, n_iter_collectSS, updatevars,
+    sims, accptr = mcmc_DPmRegJoint!(model, n_iter_collectSS, updatevars,
                             Monitor_DPmRegJoint(false, false, false),
                                     report_filename, 1, 100)
 
     for h = 1:model.H
-        model.state.cSig_ηlδx[h] = PDMat(collect_scale .*
-            model.state.runningSS_ηlδx[h,:,:] ./
-            float(model.state.adapt_iter) + Matrix(Diagonal(fill(0.0001, d))))
+        Sighat = model.state.runningSS_ηlδx[h,:,:] ./ float(model.state.adapt_iter)
+        minSighat = minimum(abs.(Sighat))
+        SighatPD = Sighat + Matrix(Diagonal(fill(0.1*minSighat, d)))
+        model.state.cSig_ηlδx[h] = PDMat(collect_scale .* SighatPD)
     end
 
     ## final scaling
-    write(report_file, "Beginning Adaptation Phase 3 of 3 (final scaling) at $(Dates.now())\n")
+    report_file = open(report_filename, "a+")
+    write(report_file, "Beginning Adaptation Phase 4 of 4 (final scaling) at $(Dates.now())\n")
 
     model.state.adapt = false
     reset_adapt!(model)
@@ -173,18 +226,18 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         tries += 1
         tries <= maxtries || throw(error("Exceeded maximum adaptation attempts."))
 
-        sims, accpt = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
+        sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
                                 Monitor_DPmRegJoint(false, false, false),
                                 report_filename, 1, 100)
 
         for h = 1:model.H
-            too_low = accpt[h] < accpt_bnds[1]
-            too_high = accpt[h] > accpt_bnds[2]
+            too_low = accptr[h] < accptr_bnds[1]
+            too_high = accptr[h] > accptr_bnds[2]
 
             if too_low
-                model.state.cSig_ηlδx[h,:,:] = model.state.cSig_ηlδx[h,:,:] .* adjust[1]
+                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] .* adjust[1]
             elseif too_high
-                model.state.cSig_ηlδx[h,:,:] = model.state.cSig_ηlδx[h,:,:] .* adjust[2]
+                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] .* adjust[2]
             else
                 fails[h] = false
             end
@@ -192,8 +245,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
     end
 
-    write(report_file, "Beginning Adaptation Phase 3 of 3 (final scaling) at $(Dates.now())\n")
-    close(report_file)
+    # mcmc! closes the report file
     reset_adapt!(model)
     model.state.adapt = false
 
