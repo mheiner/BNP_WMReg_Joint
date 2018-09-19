@@ -63,7 +63,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
 
             model.state.δ_y[h] = rand(InverseGamma(0.5*model.state.ν_δy,
                                         0.5*model.state.ν_δy*model.state.s0_δy))
-            βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.L * randn((model.K+1)) / sqrt(model.state.δ_y[h]))
+            βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.U \ randn((model.K+1)) .* sqrt(model.state.δ_y[h]))
             model.state.μ_y[h] = βstar_ηy[model.indx_ηy[:μ]]
             model.state.β_y[h,:] = βstar_ηy[model.indx_ηy[:β]]
 
@@ -121,7 +121,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                 ## Full conditional draw for η_y ( use prec. prameterization )
 
                 model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
-                βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.L * randn((model.K+1)) / sqrt(model.state.δ_y[h]))
+                βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K+1)) .* sqrt(model.state.δ_y[h]))
                 model.state.μ_y[h] = βstar_ηy[model.indx_ηy[:μ]]
                 model.state.β_y[h,:] = βstar_ηy[model.indx_ηy[:β]]
 
@@ -132,7 +132,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                 ## Full conditional draw for η_y
 
                 model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
-                βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.L * randn((model.K+1)) / sqrt(model.state.δ_y[h]))
+                βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K+1)) .* sqrt(model.state.δ_y[h]))
                 model.state.μ_y[h] = βstar_ηy[model.indx_ηy[:μ]]
                 model.state.β_y[h,:] = βstar_ηy[model.indx_ηy[:β]]
 
@@ -165,15 +165,19 @@ function lG0_ηlδx(μ_x::Array{T, 1}, β_x::Array{Array{T, 1}, 1}, lδ_x::Array
     Q_δ = 0.0
     for k = 1:(K-1)
         Q_β -= 0.5 * PDMats.quad( state.Λ0_βx[k], (β_x[k] - state.β0_βx[k]) )
-        Q_δ -= ( (0.5*state.ν_δx[k] + 1.0)*lδ_x[k] +
-                    0.5*state.ν_δx[k]*state.s0_δx[k]/exp(lδ_x[k]) )
+        # Q_δ -= ( (0.5*state.ν_δx[k] + 1.0)*lδ_x[k] +
+        #           0.5*state.ν_δx[k]*state.s0_δx[k]/exp(lδ_x[k]) ) # build Jacobian into it
+        Q_δ -= 0.5*( state.ν_δx[k]*lδ_x[k] + state.ν_δx[k]*state.s0_δx[k]/exp(lδ_x[k]) ) # Jacobian built in
+
     end
-    Q_δ -= ( (0.5*state.ν_δx[K] + 1.0)*lδ_x[K] +
-                0.5*state.ν_δx[K]*state.s0_δx[K]/exp(lδ_x[K]) )
+    # Q_δ -= ( (0.5*state.ν_δx[K] + 1.0)*lδ_x[K] +
+    #           0.5*state.ν_δx[K]*state.s0_δx[K]/exp(lδ_x[K]) )
+    Q_δ -= 0.5*( state.ν_δx[K]*lδ_x[K] + state.ν_δx[K]*state.s0_δx[K]/exp(lδ_x[K]) ) # Jacobian built in
 
-    J = sum(lδ_x) # Jacobian for log(δ) transformation
+    # J = sum(lδ_x) # Jacobian for log(δ) transformation
+    # Jacobian now built in
 
-    Q = Q_μ + Q_β + Q_δ + J
+    Q = Q_μ + Q_β + Q_δ # + J
     return Q
 end
 
