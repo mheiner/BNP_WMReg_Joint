@@ -13,7 +13,7 @@ function rpost_β0star_ηy(βstar_ηy::Array{T,2}, δ_y::Array{T,1}, Λ0star_ηy
     end
 
     ## Updated parameters
-    Prec_out = PDMat(β0star_ηy_Prec + sumδinv .* Λ0star_ηy)
+    Prec_out = β0star_ηy_Prec + sumδinv .* Λ0star_ηy # result is of type PDMat
     a = β0star_ηy_Prec * β0star_ηy_mean + Λ0star_ηy * sumyδinv
     mean_out = Prec_out \ a
 
