@@ -1,8 +1,7 @@
 # update_G0.jl
 
 function rpost_β0star_ηy(βstar_ηy::Array{T,2}, δ_y::Array{T,1}, Λ0star_ηy::PDMat{T},
-                            β0star_ηy_mean::Array{T, 1}, β0star_ηy_Prec::PDMat{T})
-                            where T <: Real
+                            β0star_ηy_mean::Array{T, 1}, β0star_ηy_Prec::PDMat{T}) where T <: Real
 
     ## Collect sufficient statistics
     nstar, Kstar = Size(βstar_ηy)
