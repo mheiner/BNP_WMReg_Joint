@@ -32,7 +32,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     if model.K > 1
         lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, β_x_h_cand, δ_x_h_cand )
     else
-        lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand, sqrt(δ_x_h_cand)), vec(model.X))
+        lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
     end
     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
 
@@ -47,9 +47,9 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                     lG0_ηlδx(μ_x_h_old, β_x_h_old, lδ_x_h_old, model.state) +
                     sum(model.state.lωNX_vec)
             else
-                lar = lG0_ηlδx(μ_x_h_cand, lδ_x_h_cand, model.state) -
+                lar = lG0_ηlδx(μ_x_h_cand[1], lδ_x_h_cand[1], model.state) -
                     sum(lωNX_vec_cand) -
-                    lG0_ηlδx(μ_x_h_old, lδ_x_h_old, model.state) +
+                    lG0_ηlδx(μ_x_h_old[1], lδ_x_h_old[1], model.state) +
                     sum(model.state.lωNX_vec)
             end
 
@@ -120,10 +120,10 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                         Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
             else
                 lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
-                        model.state, μ_x_h_cand, lδ_x_h_cand,
+                        model.state, μ_x_h_cand[1], lδ_x_h_cand[1],
                         Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
                       lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
-                        model.state, μ_x_h_old, lδ_x_h_old,
+                        model.state, μ_x_h_old[1], lδ_x_h_old[1],
                         Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
             end
 
@@ -210,8 +210,8 @@ end
 function lG0_ηlδx(μ_x::T, lδ_x::T,
                   state::State_DPmRegJoint) where T <: Real
     ## K = 1 case
-    Q_μ = - 0.5 * state.Λ0_μx * float(μ_x - state.μ0_μx)^2
-    Q_δ = - 0.5 * ( state.ν_δx*lδ_x + state.ν_δx*state.s0_δx/exp(lδ_x) ) # Jacobian built in
+    Q_μ = - 0.5 * Matrix(state.Λ0_μx)[1] * (μ_x - state.μ0_μx[1])^2.0
+    Q_δ = - 0.5 * ( state.ν_δx[1]*lδ_x + state.ν_δx[1]*state.s0_δx[1]/exp(lδ_x) ) # Jacobian built in
 
     Q = Q_μ + Q_δ
     return Q
@@ -241,7 +241,7 @@ function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_v
 
 end
 function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_vec::Array{T, 1},
-    state::State_DPmRegJoint, μ_x_h::Array{T, 1}, lδ_x_h::Array{T, 1},
+    state::State_DPmRegJoint, μ_x_h::T, lδ_x_h::T,
     Λ1star_ηy_h::PDMat{T}, a1_δy::T, b1_δy::T) where T <: Real
 
     ## K = 1 case

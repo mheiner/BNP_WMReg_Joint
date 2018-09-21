@@ -124,7 +124,9 @@ mutable struct Prior_DPmRegJoint
     s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov, inv(β0star_ηy_Cov),
     Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, inv(μ0_μx_Cov), Λ0_μx_df, Λ0_μx_S0,
-    β0_βx_mean, β0_βx_Cov, [inv(β0_βx_Cov[k]) for k = 1:length(β0_βx_Cov)], Λ0_βx_df, Λ0_βx_S0,
+    β0_βx_mean, β0_βx_Cov,
+    ( typeof(β0_βx_Cov) == Nothing ? nothing : [inv(β0_βx_Cov[k]) for k = 1:length(β0_βx_Cov)] ),
+    Λ0_βx_df, Λ0_βx_S0,
     s0_δx_df, s0_δx_s0)
 end
 
@@ -261,13 +263,13 @@ PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int
 (m.ηlω ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # α
 (m.S ? Array{samptypes[2], 2}(undef, n_keep, n) : Array{samptypes[2], 2}(undef, 0, 0)), # S
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K+1) : Array{samptypes[1], 2}(undef, 0, 0)), # β0star_ηy
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, (K+1)*(K+2)/2) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0star_ηy
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, Int((K+1)*(K+2)/2)) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0star_ηy
 (m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # ν_δy
 (m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # s0_δy
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # μ0_μx
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, (K)*(K+1)/2) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0_μx
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, Int((K)*(K+1)/2)) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0_μx
 (m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k) for k = (K-1):-1:1 ] : nothing ), # β0_βx
-(m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k*(k+1)/2) for k = (K-1):-1:1 ] : nothing ), # Λ0_βx
+(m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, Int(k*(k+1)/2)) for k = (K-1):-1:1 ] : nothing ), # Λ0_βx
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # ν_δx
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)) ) # s0_δx
 
