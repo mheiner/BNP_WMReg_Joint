@@ -72,8 +72,8 @@ function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::
     ### Step B: Randomly position hyperrectangle
 
     U = rand(HH)
-    L = max.(v .- w_slice .* U, 0.0)
-    R = min.(L .+ w_slice, 1.0)
+    L = max.(v .- w_slice .* U, 0.0 + eps(T))
+    R = min.(L .+ w_slice, 1.0 - eps(T))
 
     ### Step C: Sample from hyperrectangle, shrinking when rejected
 
@@ -92,7 +92,7 @@ function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::
         if keeptrying
 
             tries += 1
-            tries <= maxtries || throw(Error("Exceeded maximum slice attempts."))
+            tries <= maxtries || throw(error("Exceeded maximum slice attempts."))
 
             for h = 1:HH
                 if cand[h] < v[h]

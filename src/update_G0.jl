@@ -4,7 +4,7 @@ function rpost_β0star_ηy(βstar_ηy::Array{T,2}, δ_y::Array{T,1}, Λ0star_ηy
                             β0star_ηy_mean::Array{T, 1}, β0star_ηy_Prec::PDMat{T}) where T <: Real
 
     ## Collect sufficient statistics
-    nstar, Kstar = Size(βstar_ηy)
+    nstar, Kstar = size(βstar_ηy)
     sumδinv = 0.0
     sumyδinv = zeros(T, Kstar)
     for i = 1:nstar
@@ -24,7 +24,7 @@ end
 function rpost_Λ0star_ηy(βstar_ηy::Array{T,2}, δ_y::Array{T,1}, β0star_ηy::Array{T,1},
                                  df::T, invSc::PDMat{T}) where T <: Real
     ## Collect sufficient statistic
-    nstar, Kstar = Size(βstar_ηy)
+    nstar, Kstar = size(βstar_ηy)
     SS = zeros(T, Kstar, Kstar)
     for i = 1:nstar
         dev = (βstar_ηy[i,:] - β0star_ηy) ./ δ_y[i]
@@ -37,7 +37,7 @@ function rpost_Λ0star_ηy(βstar_ηy::Array{T,2}, δ_y::Array{T,1}, β0star_ηy
     Sc1 = inv(invSc1) # is there some way around this?
 
     ## Sample
-    return rand(Distributions.Wishart(df1, Sc1))
+    return PDMat(rand(Distributions.Wishart(df1, Sc1)))
 end
 
 function rpost_IGs0_gammaPri(δ::Array{T,1}, ν::T, n0::T, s00::T) where T <: Real
@@ -45,7 +45,7 @@ function rpost_IGs0_gammaPri(δ::Array{T,1}, ν::T, n0::T, s00::T) where T <: Re
     # ν is the degrees of freedom of the IG
     # the gamma prior has shape ν*n0/2 and rate ν*n0/(2*s00)
     cc = 0.5 * ν
-    sh_out = cc * (n0 + lengh(δ))
+    sh_out = cc * (n0 + length(δ))
     rate_out = cc * (n0 / s00 + sum( 1.0 ./ δ) )
     rand( Distributions.Gamma(sh_out, 1.0 / rate_out) )
 end
@@ -53,7 +53,7 @@ end
 function update_G0!(model::Model_DPmRegJoint)
     ii = sort(unique(model.state.S))
 
-    βstar_ηy = hcat(μ_y[ii], β_y[ii,:])
+    βstar_ηy = hcat(model.state.μ_y[ii], model.state.β_y[ii,:])
 
     model.state.β0star_ηy = rpost_β0star_ηy( βstar_ηy,
             model.state.δ_y[ii], model.state.Λ0star_ηy,
@@ -71,9 +71,9 @@ function update_G0!(model::Model_DPmRegJoint)
                                 model.state.Λ0_μx,
                                 model.prior.μ0_μx_mean, model.prior.μ0_μx_Prec)
 
-    model.state.Λ0_μx = BayesInference.rpost_MvNprec_knownMean(model.state.μ_x[ii,:],
+    model.state.Λ0_μx = PDMat(BayesInference.rpost_MvNprec_knownMean(model.state.μ_x[ii,:],
                                 model.state.μ0_μx,
-                                model.prior.Λ0_μx_df, model.prior.Λ0_μx_df * model.prior.Λ0_μx_S0)
+                                model.prior.Λ0_μx_df, model.prior.Λ0_μx_df * model.prior.Λ0_μx_S0))
 
     if model.K > 1
         for k = 1:(model.K - 1)
@@ -82,10 +82,10 @@ function update_G0!(model::Model_DPmRegJoint)
                 model.state.Λ0_βx[k],
                 model.prior.β0_βx_mean[k], model.prior.β0_βx_Prec[k])
 
-            model.state.Λ0_βx[k] = BayesInference.rpost_MvNprec_knownMean(
+            model.state.Λ0_βx[k] = PDMat(BayesInference.rpost_MvNprec_knownMean(
                 model.state.β_x[k][ii,:],
                 model.state.β0_βx[k],
-                model.prior.Λ0_βx_df[k], model.prior.Λ0_βx_df[k] * model.prior.Λ0_βx_S0[k])
+                model.prior.Λ0_βx_df[k], model.prior.Λ0_βx_df[k] * model.prior.Λ0_βx_S0[k]))
 
             model.state.s0_δx[k] = rpost_IGs0_gammaPri(
                 model.state.δ_x[ii,k], model.state.ν_δx[k],
