@@ -86,7 +86,7 @@ mutable struct State_DPmRegJoint
         zeros(Float64, 1, 1), zeros(Float64, 1))
 end
 
-function copy(s::State_DPmRegJoint)
+function Base.copy(s::State_DPmRegJoint)
     State_DPmRegJoint(s.μ_y, s.β_y, s.δ_y, s.μ_x, s.β_x, s.δ_x,
     s.S, s.lω, s.α, s.β0star_ηy, s.Λ0star_ηy, s.ν_δy, s.s0_δy, s.μ0_μx, s.Λ0_μx,
     s.β0_βx, s.Λ0_βx, s.ν_δx, s.s0_δx,
@@ -138,7 +138,7 @@ mutable struct Prior_DPmRegJoint
     s0_δx_df, s0_δx_s0)
 end
 
-function copy(p::Prior_DPmRegJoint)
+function Base.copy(p::Prior_DPmRegJoint)
     Prior_DPmRegJoint(p.α_sh, p.α_rate, p.β0star_ηy_mean, p.β0star_ηy_Cov,
     p.β0star_ηy_Prec, p.Λ0star_ηy_df, p.Λ0star_ηy_S0, p.s0_δy_df, p.s0_δy_s0,
     p.μ0_μx_mean, p.μ0_μx_Cov, p.μ0_μx_Prec, p.Λ0_μx_df, p.Λ0_μx_S0,
