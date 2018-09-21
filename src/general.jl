@@ -310,7 +310,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
 
         δ_x = vcat([ copy(s0_δx) for h = 1:H ]'...)
 
-        β_x = [ vcat( [copy(β0_βx[k]) for h = 1:H]'... ) for k = (K-1):-1:1 ]
+        β_x = [ vcat( [copy(β0_βx[k]) for h = 1:H]'... ) for k = 1:(K-1) ]
 
         μ_x = vcat([ copy(μ0_μx) for h = 1:H ]'...)
         δ_y = fill(s0_δy, H)
