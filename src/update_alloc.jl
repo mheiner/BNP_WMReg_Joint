@@ -3,7 +3,7 @@
 function update_alloc!(model::Model_DPmRegJoint, yX::Array{T,2}) where T <: Real
 
     μ = hcat(model.state.μ_y, model.state.μ_x)
-    β = [model.state.β_y, model.state.β_x...]
+    β = ( model.K > 1 ? [model.state.β_y, model.state.β_x...] : [ model.state.β_y ])
     δ = hcat(model.state.δ_y, model.state.δ_x)
 
     # the rest could be done in parallel

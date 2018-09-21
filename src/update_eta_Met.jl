@@ -1,9 +1,5 @@
 # update_eta_Met.jl
 
-## not fully compatible with K=1
-
-
-
 # pre_compute Λ0star_ηy*β0star_ηy and β0star_ηy'Λ0star_ηy*β0star_ηy which are not indexed by h
 function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
 
@@ -11,23 +7,33 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     n_h = length(indx_h)
 
     μ_x_h_old = model.state.μ_x[h,:]
-    β_x_h_old = [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ]
     lδ_x_h_old = log.(model.state.δ_x[h,:])
-    ηlδ_x_old = vcat(μ_x_h_old,
-                   vcat(β_x_h_old...),
-                   lδ_x_h_old)
+    if model.K > 1
+        β_x_h_old = [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ]
+        ηlδ_x_old = vcat(μ_x_h_old,
+                       vcat(β_x_h_old...),
+                       lδ_x_h_old)
+    else
+        ηlδ_x_old = vcat(μ_x_h_old, lδ_x_h_old)
+    end
 
     ## Draw candidate for η_x
     ηlδ_x_cand = ηlδ_x_old + rand(MvNormal(model.state.cSig_ηlδx[h]))
     μ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:μ]]
-    β_x_h_candvec = ηlδ_x_cand[model.indx_ηx[:β]]
-    β_x_h_cand = [ β_x_h_candvec[model.indx_β_x[k]] for k = 1:(model.K-1) ]
+    if model.K > 1
+        β_x_h_candvec = ηlδ_x_cand[model.indx_ηx[:β]]
+        β_x_h_cand = [ β_x_h_candvec[model.indx_β_x[k]] for k = 1:(model.K-1) ]
+    end
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
     ## Compute lωNX_vec for candidate
     lNX_mat_cand = copy(model.state.lNX)
-    lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, β_x_h_cand, δ_x_h_cand )
+    if model.K > 1
+        lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, β_x_h_cand, δ_x_h_cand )
+    else
+        lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand, sqrt(δ_x_h_cand)), vec(model.X))
+    end
     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
 
     if n_h == 0
@@ -35,17 +41,26 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
         ## Metropolis step for η_x
 
             ## Compute acceptance ratio
-            lar = lG0_ηlδx(μ_x_h_cand, β_x_h_cand, lδ_x_h_cand, model.state) -
+            if model.K > 1
+                lar = lG0_ηlδx(μ_x_h_cand, β_x_h_cand, lδ_x_h_cand, model.state) -
                     sum(lωNX_vec_cand) -
-                    lG0_ηlδx(model.state.μ_x[h,:], β_x_h_old, lδ_x_h_old, model.state) +
+                    lG0_ηlδx(μ_x_h_old, β_x_h_old, lδ_x_h_old, model.state) +
                     sum(model.state.lωNX_vec)
+            else
+                lar = lG0_ηlδx(μ_x_h_cand, lδ_x_h_cand, model.state) -
+                    sum(lωNX_vec_cand) -
+                    lG0_ηlδx(μ_x_h_old, lδ_x_h_old, model.state) +
+                    sum(model.state.lωNX_vec)
+            end
 
             ## Decision and update
             if log(rand()) < lar # accept
 
                 model.state.μ_x[h,:] = μ_x_h_cand
-                for k = 1:(model.K - 1)
-                    model.state.β_x[k][h,:] = β_x_h_cand[k]
+                if model.K > 1
+                    for k = 1:(model.K - 1)
+                        model.state.β_x[k][h,:] = β_x_h_cand[k]
+                    end
                 end
                 model.state.δ_x[h,:] = δ_x_h_cand
 
@@ -96,19 +111,31 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
 
             ## Compute acceptance ratio
-            lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
-                model.state, μ_x_h_cand, β_x_h_cand, lδ_x_h_cand,
-                Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
-                lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
-                    model.state, μ_x_h_old, β_x_h_old, lδ_x_h_old,
-                    Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
+            if model.K > 1
+                lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
+                        model.state, μ_x_h_cand, β_x_h_cand, lδ_x_h_cand,
+                        Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
+                      lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
+                        model.state, μ_x_h_old, β_x_h_old, lδ_x_h_old,
+                        Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
+            else
+                lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
+                        model.state, μ_x_h_cand, lδ_x_h_cand,
+                        Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
+                      lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
+                        model.state, μ_x_h_old, lδ_x_h_old,
+                        Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
+            end
+
 
             ## Decision and update
             if log(rand()) < lar # accept
 
                 model.state.μ_x[h,:] = μ_x_h_cand
-                for k = 1:(model.K - 1)
-                    model.state.β_x[k][h,:] = β_x_h_cand[k]
+                if model.K > 1
+                    for k = 1:(model.K - 1)
+                        model.state.β_x[k][h,:] = β_x_h_cand[k]
+                    end
                 end
                 model.state.δ_x[h,:] = δ_x_h_cand
 
@@ -180,7 +207,15 @@ function lG0_ηlδx(μ_x::Array{T, 1}, β_x::Array{Array{T, 1}, 1}, lδ_x::Array
     Q = Q_μ + Q_β + Q_δ # + J
     return Q
 end
+function lG0_ηlδx(μ_x::T, lδ_x::T,
+                  state::State_DPmRegJoint) where T <: Real
+    ## K = 1 case
+    Q_μ = - 0.5 * state.Λ0_μx * float(μ_x - state.μ0_μx)^2
+    Q_δ = - 0.5 * ( state.ν_δx*lδ_x + state.ν_δx*state.s0_δx/exp(lδ_x) ) # Jacobian built in
 
+    Q = Q_μ + Q_δ
+    return Q
+end
 
 ### log-collapsed conditional
 function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_vec::Array{T, 1},
@@ -195,6 +230,30 @@ function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_v
 
     # Q3 , G0 including Jacobian
     Q3 = lG0_ηlδx(μ_x_h, β_x_h, lδ_x_h, state)
+
+    # Q4
+    Q4 = logdet(Λ1star_ηy_h)
+
+    # Q5
+    Q5 = log(b1_δy)
+
+    return Q1 - Q2 + Q3 - 0.5*Q4 - (a1_δy)*Q5
+
+end
+function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_vec::Array{T, 1},
+    state::State_DPmRegJoint, μ_x_h::Array{T, 1}, lδ_x_h::Array{T, 1},
+    Λ1star_ηy_h::PDMat{T}, a1_δy::T, b1_δy::T) where T <: Real
+
+    ## K = 1 case
+
+    # Q1
+    Q1 = sum( lNX_mat[indx_h, h] )
+
+    # Q2
+    Q2 = sum(lωNX_vec)
+
+    # Q3 , G0 including Jacobian
+    Q3 = lG0_ηlδx(μ_x_h, lδ_x_h, state)
 
     # Q4
     Q4 = logdet(Λ1star_ηy_h)

@@ -22,7 +22,12 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     prev_accpt = copy(model.state.accpt) # set every report_freq iterations
 
     yX = hcat(model.y, model.X) # useful for allocation update
-    model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
+    if model.K > 1
+        model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
+    else
+        model.state.lNX = lNXmat(vec(model.X), vec(model.state.μ_x), vec(model.state.δ_x))
+    end
+
     model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
 
     ## sampling
@@ -51,7 +56,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
             end
 
             if updatevars.G0
-
+                update_G0!(model)
             end
 
             model.state.iter += 1
@@ -178,10 +183,12 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                     if too_low
                         tmp = Matrix(model.state.cSig_ηlδx[h])
                         tmp[ig,ig] = tmp[ig,ig] .* adjust[1]
+                        tmp += Diagonal(fill(0.1*minimum(diag(tmp)), size(tmp,1)))
                         model.state.cSig_ηlδx[h] = PDMat(tmp)
                     elseif too_high
                         tmp = Matrix(model.state.cSig_ηlδx[h])
                         tmp[ig,ig] = tmp[ig,ig] .* adjust[2]
+                        tmp += Diagonal(fill(0.1*minimum(diag(tmp)), size(tmp,1)))
                         model.state.cSig_ηlδx[h] = PDMat(tmp)
                     else
                         fails[h] = false
