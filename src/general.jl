@@ -3,7 +3,7 @@
 export State_DPmRegJoint, init_state_DPmRegJoint,
     Prior_DPmRegJoint, Model_DPmRegJoint,
     Monitor_DPmRegJoint, Updatevars_DPmRegJoint,
-    PostSims_DPmRegJoint, compute_lNX, reset_adapt!;
+    PostSims_DPmRegJoint, compute_lNX, reset_adapt!, copy;
 
 mutable struct State_DPmRegJoint
 
@@ -86,6 +86,14 @@ mutable struct State_DPmRegJoint
         zeros(Float64, 1, 1), zeros(Float64, 1))
 end
 
+function copy(s::State_DPmRegJoint)
+    State_DPmRegJoint(s.μ_y, s.β_y, s.δ_y, s.μ_x, s.β_x, s.δ_x,
+    s.S, s.lω, s.α, s.β0star_ηy, s.Λ0star_ηy, s.ν_δy, s.s0_δy, s.μ0_μx, s.Λ0_μx,
+    s.β0_βx, s.Λ0_βx, s.ν_δx, s.s0_δx,
+    s.iter, s.accpt, s.cSig_ηlδx,
+    s.adapt, s.adapt_iter, s.runningsum_ηlδx, s.runningSS_ηlδx, s.lNX, s.lωNX_vec)
+end
+
 mutable struct Prior_DPmRegJoint
     α_sh::Float64   # gamma shape
     α_rate::Float64 # gamma rate
@@ -130,6 +138,16 @@ mutable struct Prior_DPmRegJoint
     s0_δx_df, s0_δx_s0)
 end
 
+function copy(p::Prior_DPmRegJoint)
+    Prior_DPmRegJoint(p.α_sh, p.α_rate, p.β0star_ηy_mean, p.β0star_ηy_Cov,
+    p.β0star_ηy_Prec, p.Λ0star_ηy_df, p.Λ0star_ηy_S0, p.s0_δy_df, p.s0_δy_s0,
+    p.μ0_μx_mean, p.μ0_μx_Cov, p.μ0_μx_Prec, p.Λ0_μx_df, p.Λ0_μx_S0,
+    p.β0_βx_mean, p.β0_βx_Cov,
+    p.β0_βx_Prec,
+    p.Λ0_βx_df, p.Λ0_βx_S0,
+    p.s0_δx_df, p.s0_δx_s0)
+end
+
 # default
 function Prior_DPmRegJoint(K::Int, H::Int)
 
@@ -170,7 +188,11 @@ mutable struct Model_DPmRegJoint
 
     state::State_DPmRegJoint # this is the only thing that should change
 
+    Model_DPmRegJoint(y, X, n, K, H, prior,
+        indx_ηy, indx_ηx, indx_β_x, state) = new(y, X, n, K, H, copy(prior),
+            indx_ηy, indx_ηx, indx_β_x, copy(state))
 end
+
 function Model_DPmRegJoint(y::Array{Float64, 1}, X::Array{Float64, 2},
     H::Int, prior::Prior_DPmRegJoint, state::State_DPmRegJoint)
 
