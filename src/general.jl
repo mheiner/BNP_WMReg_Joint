@@ -125,6 +125,22 @@ mutable struct Prior_DPmRegJoint
     s0_δx_df::Array{Float64, 1}   # vector of scaled inv. chi-square deg. of freedom
     s0_δx_s0::Array{Float64, 1}   # vector of scaled inv. chi-square harmonic mean
 
+    ## full spec
+    Prior_DPmRegJoint(p.α_sh, p.α_rate, p.β0star_ηy_mean, p.β0star_ηy_Cov,
+    p.β0star_ηy_Prec, p.Λ0star_ηy_df, p.Λ0star_ηy_S0, p.s0_δy_df, p.s0_δy_s0,
+    p.μ0_μx_mean, p.μ0_μx_Cov, p.μ0_μx_Prec, p.Λ0_μx_df, p.Λ0_μx_S0,
+    p.β0_βx_mean, p.β0_βx_Cov,
+    p.β0_βx_Prec,
+    p.Λ0_βx_df, p.Λ0_βx_S0,
+    p.s0_δx_df, p.s0_δx_s0) = new(p.α_sh, p.α_rate, p.β0star_ηy_mean, p.β0star_ηy_Cov,
+    p.β0star_ηy_Prec, p.Λ0star_ηy_df, p.Λ0star_ηy_S0, p.s0_δy_df, p.s0_δy_s0,
+    p.μ0_μx_mean, p.μ0_μx_Cov, p.μ0_μx_Prec, p.Λ0_μx_df, p.Λ0_μx_S0,
+    p.β0_βx_mean, p.β0_βx_Cov,
+    p.β0_βx_Prec,
+    p.Λ0_βx_df, p.Λ0_βx_S0,
+    p.s0_δx_df, p.s0_δx_s0)
+
+    ## automatic creation of precision matrices from covariance matrices
     Prior_DPmRegJoint(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov,
     Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, Λ0_μx_df, Λ0_μx_S0,
