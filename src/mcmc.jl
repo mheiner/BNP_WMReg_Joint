@@ -37,8 +37,15 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
             if updatevars.η
                 Λβ0star_ηy = model.state.Λ0star_ηy*model.state.β0star_ηy
                 βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
-                for h = 1:model.H
-                    update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+
+                if model.K > 1
+                    for h = 1:model.H
+                        update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+                    end
+                else
+                    for h = 1:model.H
+                        update_η_h_Met_K1!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+                    end
                 end
             end
 

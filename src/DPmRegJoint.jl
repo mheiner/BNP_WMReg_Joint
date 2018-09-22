@@ -17,5 +17,6 @@ include("update_alloc.jl")
 include("update_weights.jl")
 include("update_eta_Met.jl")
 include("update_G0.jl")
+include("densityEstimation.jl")
 
 end

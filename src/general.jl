@@ -3,7 +3,7 @@
 export State_DPmRegJoint, init_state_DPmRegJoint,
     Prior_DPmRegJoint, Model_DPmRegJoint,
     Monitor_DPmRegJoint, Updatevars_DPmRegJoint,
-    PostSims_DPmRegJoint, compute_lNX, reset_adapt!, copy;
+    PostSims_DPmRegJoint, lNXmat, reset_adapt!, copy;
 
 mutable struct State_DPmRegJoint
 
@@ -315,7 +315,12 @@ function lNXmat(X::Array{T, 2}, μ::Array{T, 2}, β::Array{Array{T, 2}, 1}, δ::
     hcat( [lNX_sqfChol( Matrix(X'), μ[h,:], [ β[k][h,:] for k = 1:(size(X,2)-1) ], δ[h,:] )
             for h = 1:size(μ, 1) ]...)
 end
-function lNXmat(x::Array{T,1}, μ::Array{T,1}, δ::Array{T,1}) where T <: Real
+function lNXmat(x::Union{Array{T,1}, Array{T,2}},
+                μ::Union{Array{T,1}, Array{T,2}},
+                δ::Union{Array{T,1}, Array{T,2}}) where T <: Real
+    x = vec(x)
+    μ = vec(μ)
+    δ = vec(δ)
     hcat( [ logpdf.(Normal(μ[h], sqrt(δ[h])), x) for h = 1:length(μ) ]...)
 end
 
