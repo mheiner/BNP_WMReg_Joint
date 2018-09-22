@@ -48,6 +48,7 @@ mutable struct State_DPmRegJoint
     runningSS_ηlδx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
     lNX::Array{Float64, 2} # n by H matrix of log(pdf(Normal(x_i))) under each obs i and allocation h
     lωNX_vec::Array{Float64, 1} # n vector with log( sum_j ωN(x_i) )
+    n_occup::Int
 
     # for coninuing an adapt phase
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
@@ -58,7 +59,7 @@ mutable struct State_DPmRegJoint
         S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
-        adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec)
+        adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, length(unique(S)))
 
     # for starting new
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
@@ -72,7 +73,8 @@ mutable struct State_DPmRegJoint
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
-        zeros(Float64, 1, 1), zeros(Float64, 1) )
+        zeros(Float64, 1, 1), zeros(Float64, 1),
+        length(unique(S)) )
 
     # for starting new but not adapting
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
@@ -83,7 +85,8 @@ mutable struct State_DPmRegJoint
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
         false, nothing, nothing, nothing,
-        zeros(Float64, 1, 1), zeros(Float64, 1))
+        zeros(Float64, 1, 1), zeros(Float64, 1),
+        length(unique(S)))
 end
 
 function Base.copy(s::State_DPmRegJoint)
@@ -91,7 +94,7 @@ function Base.copy(s::State_DPmRegJoint)
     s.S, s.lω, s.α, s.β0star_ηy, s.Λ0star_ηy, s.ν_δy, s.s0_δy, s.μ0_μx, s.Λ0_μx,
     s.β0_βx, s.Λ0_βx, s.ν_δx, s.s0_δx,
     s.iter, s.accpt, s.cSig_ηlδx,
-    s.adapt, s.adapt_iter, s.runningsum_ηlδx, s.runningSS_ηlδx, s.lNX, s.lωNX_vec)
+    s.adapt, s.adapt_iter, s.runningsum_ηlδx, s.runningSS_ηlδx, s.lNX, s.lωNX_vec, s.n_occup)
 end
 
 mutable struct Prior_DPmRegJoint
@@ -267,13 +270,15 @@ mutable struct PostSims_DPmRegJoint
     ν_δx::Array{<:Real, 2}     # nsim by K matrix
     s0_δx::Array{<:Real, 2}    # nsim by K matrix
 
+    n_occup::Array{<:Integer, 1} # nsim vector
+
 PostSims_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
 lω, α, S,
 β0star_ηy, Λ0star_ηy, ν_δy, s0_δy,
-μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx, n_occup) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
 lω, α, S,
 β0star_ηy, Λ0star_ηy, ν_δy, s0_δy,
-μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx)
+μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx, n_occup)
 end
 
 mutable struct Monitor_DPmRegJoint
@@ -309,7 +314,8 @@ PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int
 (m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k) for k = (K-1):-1:1 ] : nothing ), # β0_βx
 (m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, Int(k*(k+1)/2)) for k = (K-1):-1:1 ] : nothing ), # Λ0_βx
 (m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # ν_δx
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)) ) # s0_δx
+(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # s0_δx
+Array{samptypes[2], 1}(undef, n_keep) ) # n_occup
 
 function lNXmat(X::Array{T, 2}, μ::Array{T, 2}, β::Array{Array{T, 2}, 1}, δ::Array{T, 2}) where T <: Real
     hcat( [lNX_sqfChol( Matrix(X'), μ[h,:], [ β[k][h,:] for k = 1:(size(X,2)-1) ], δ[h,:] )

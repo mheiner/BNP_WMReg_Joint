@@ -93,6 +93,8 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
             sims.S[i,:] = Array{samptypes[2]}(model.state.S)     # nsim by n matrix
         end
 
+        sims.n_occup[i] = samptypes[2](model.state.n_occup)
+
         if monitor.G0
             sims.β0star_ηy[i,:] = Array{samptypes[1]}(model.state.β0star_ηy)    # nsim by K+1 matrix
             sims.Λ0star_ηy[i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0star_ηy), true))    # nsim by length(vech) matrix

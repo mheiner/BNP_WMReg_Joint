@@ -21,5 +21,7 @@ function update_alloc!(model::Model_DPmRegJoint, yX::Array{T,2}) where T <: Real
     alloc_new = [ sample(StatsBase.Weights(W[i,:])) for i = 1:model.n ]
     model.state.S = alloc_new
 
+    model.state.n_occup = length(unique(alloc_new))
+
     return nothing
 end
