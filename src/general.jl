@@ -94,7 +94,7 @@ function Base.copy(s::State_DPmRegJoint)
     s.S, s.lω, s.α, s.β0star_ηy, s.Λ0star_ηy, s.ν_δy, s.s0_δy, s.μ0_μx, s.Λ0_μx,
     s.β0_βx, s.Λ0_βx, s.ν_δx, s.s0_δx,
     s.iter, s.accpt, s.cSig_ηlδx,
-    s.adapt, s.adapt_iter, s.runningsum_ηlδx, s.runningSS_ηlδx, s.lNX, s.lωNX_vec, s.n_occup)
+    s.adapt, s.adapt_iter, s.runningsum_ηlδx, s.runningSS_ηlδx, s.lNX, s.lωNX_vec)
 end
 
 mutable struct Prior_DPmRegJoint
