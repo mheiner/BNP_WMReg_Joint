@@ -153,7 +153,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         for h = 1:model.H
             fails[h] = (accptr[h] < accptr_bnds[1])
             if fails[h]
-                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] .* adjust[1]
+                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[1]
             end
         end
 
@@ -191,12 +191,12 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
                     if too_low
                         tmp = Matrix(model.state.cSig_ηlδx[h])
-                        tmp[ig,ig] = tmp[ig,ig] .* adjust[1]
+                        tmp[ig,ig] = tmp[ig,ig] * adjust[1]
                         tmp += Diagonal(fill(0.1*minimum(diag(tmp)), size(tmp,1)))
                         model.state.cSig_ηlδx[h] = PDMat(tmp)
                     elseif too_high
                         tmp = Matrix(model.state.cSig_ηlδx[h])
-                        tmp[ig,ig] = tmp[ig,ig] .* adjust[2]
+                        tmp[ig,ig] = tmp[ig,ig] * adjust[2]
                         tmp += Diagonal(fill(0.1*minimum(diag(tmp)), size(tmp,1)))
                         model.state.cSig_ηlδx[h] = PDMat(tmp)
                     else
@@ -222,10 +222,10 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                                     report_filename, 1, 100)
 
     for h = 1:model.H
-        Sighat = model.state.runningSS_ηlδx[h,:,:] ./ float(model.state.adapt_iter)
+        Sighat = model.state.runningSS_ηlδx[h,:,:] / float(model.state.adapt_iter)
         minSighat = minimum(abs.(Sighat))
         SighatPD = Sighat + Matrix(Diagonal(fill(0.1*minSighat, d)))
-        model.state.cSig_ηlδx[h] = PDMat(collect_scale .* SighatPD)
+        model.state.cSig_ηlδx[h] = PDMat(collect_scale * SighatPD)
     end
 
     ## final scaling
@@ -251,9 +251,9 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             too_high = accptr[h] > accptr_bnds[2]
 
             if too_low
-                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] .* adjust[1]
+                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[1]
             elseif too_high
-                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] .* adjust[2]
+                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[2]
             else
                 fails[h] = false
             end

@@ -141,7 +141,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     if model.state.adapt
         model.state.adapt_iter += 1
         model.state.runningsum_ηlδx[h,:] += ηlδ_x_out
-        runningmean = model.state.runningsum_ηlδx[h,:] ./ float(model.state.adapt_iter)
+        runningmean = model.state.runningsum_ηlδx[h,:] / float(model.state.adapt_iter)
         runningdev = ( ηlδ_x_out - runningmean )
         model.state.runningSS_ηlδx[h,:,:] = runningdev * runningdev' # the mean is changing, but this approx. is fine.
     end
@@ -277,7 +277,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
     if model.state.adapt
         model.state.adapt_iter += 1
         model.state.runningsum_ηlδx[h,:] += ηlδ_x_out
-        runningmean = model.state.runningsum_ηlδx[h,:] ./ float(model.state.adapt_iter)
+        runningmean = model.state.runningsum_ηlδx[h,:] / float(model.state.adapt_iter)
         runningdev = ( ηlδ_x_out - runningmean )
         model.state.runningSS_ηlδx[h,:,:] = runningdev * runningdev' # the mean is changing, but this approx. is fine.
     end
