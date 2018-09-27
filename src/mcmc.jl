@@ -189,15 +189,19 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                     too_low = accptr[h] < (accptr_bnds[1] * 0.5)
                     too_high = accptr[h] > (accptr_bnds[2] * 0.75)
 
+                    tmp = Matrix(model.state.cSig_ηlδx[h])
+                    σ = sqrt.(LinearAlgebra.diag(tmp))
+                    ρ = StatsBase.cov2cor(tmp, σ)
+
                     if too_low
-                        tmp = Matrix(model.state.cSig_ηlδx[h])
-                        tmp[ig,ig] = tmp[ig,ig] * adjust[1]
-                        tmp += Diagonal(fill(0.1*minimum(diag(tmp)), size(tmp,1)))
+                        σ[ig] = σ[ig] * adjust[1]
+                        tmp = StatsBase.cor2cov(ρ, σ)
+                        tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
                         model.state.cSig_ηlδx[h] = PDMat(tmp)
                     elseif too_high
-                        tmp = Matrix(model.state.cSig_ηlδx[h])
-                        tmp[ig,ig] = tmp[ig,ig] * adjust[2]
-                        tmp += Diagonal(fill(0.1*minimum(diag(tmp)), size(tmp,1)))
+                        σ[ig] = σ[ig] * adjust[2]
+                        tmp = StatsBase.cor2cov(ρ, σ)
+                        tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
                         model.state.cSig_ηlδx[h] = PDMat(tmp)
                     else
                         fails[h] = false
