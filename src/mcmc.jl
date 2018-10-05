@@ -122,18 +122,30 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 end
 
 
+function adjust_from_accptr(accptr::T, target::T, adjust_bnds::Array{T,1}) where T <: Real
+    if accptr < target
+        out = (1.0 - adjust_bnds[1]) * accptr / target + adjust_bnds[1]
+    else
+        out = (adjust_bnds[2] - 1.0) * (accptr - target) / (1.0 - target) + 1.0
+    end
+
+    return out
+end
+
 
 function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_iter_scale::Int,
     updatevars::Updatevars_DPmRegJoint,
     report_filename::String="out_progress.txt",
-    maxtries::Int=100, accptr_bnds::Vector{T}=[0.23, 0.35], adjust::Vector{T}=[0.77, 1.3]) where T <: Real
+    maxtries::Int=200, accptr_bnds::Vector{T}=[0.23, 0.44], adjust_bnds::Vector{T}=[0.01, 10.0]) where T <: Real
 
+    target = StatsBase.mean(accptr_bnds)
     d = Int((model.K + model.K*(model.K+1)/2))
     collect_scale = 2.38^2 / float(d)
 
     ## initial runs
     report_file = open(report_filename, "a+")
     write(report_file, "Beginning Adaptation Phase 1 of 4 (initial scaling) at $(Dates.now())\n")
+    close(report_file)
 
     model.state.adapt = false
     reset_adapt!(model)
@@ -153,7 +165,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         for h = 1:model.H
             fails[h] = (accptr[h] < accptr_bnds[1])
             if fails[h]
-                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[1]
+                model.state.cSig_ηlδx[h] *= adjust_from_accptr(accptr[h], target, adjust_bnds)
             end
         end
 
@@ -163,9 +175,12 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     ## local scaling
     report_file = open(report_filename, "a+")
     write(report_file, "Beginning Adaptation Phase 2 of 4 (local scaling) at $(Dates.now())\n")
+    close(report_file)
 
     model.state.adapt = false
     reset_adapt!(model)
+
+    localtarget = target * 0.75
 
     for ii = 1:3
 
@@ -193,17 +208,26 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                     σ = sqrt.(LinearAlgebra.diag(tmp))
                     ρ = StatsBase.cov2cor(tmp, σ)
 
-                    if too_low
-                        σ[ig] = σ[ig] * adjust[1]
-                        tmp = StatsBase.cor2cov(ρ, σ)
-                        tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
-                        model.state.cSig_ηlδx[h] = PDMat(tmp)
-                    elseif too_high
-                        σ[ig] = σ[ig] * adjust[2]
-                        tmp = StatsBase.cor2cov(ρ, σ)
-                        tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
-                        model.state.cSig_ηlδx[h] = PDMat(tmp)
-                    else
+                    σ[ig] *= adjust_from_accptr(accptr[h], localtarget, adjust_bnds)
+                    tmp = StatsBase.cor2cov(ρ, σ)
+                    tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
+                    model.state.cSig_ηlδx[h] = PDMat(tmp)
+
+                    # if too_low
+                    #     σ[ig] = σ[ig] * adjust[1]
+                    #     tmp = StatsBase.cor2cov(ρ, σ)
+                    #     tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
+                    #     model.state.cSig_ηlδx[h] = PDMat(tmp)
+                    # elseif too_high
+                    #     σ[ig] = σ[ig] * adjust[2]
+                    #     tmp = StatsBase.cor2cov(ρ, σ)
+                    #     tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
+                    #     model.state.cSig_ηlδx[h] = PDMat(tmp)
+                    # else
+                    #     fails[h] = false
+                    # end
+
+                    if !too_low && !too_high
                         fails[h] = false
                     end
                 end
@@ -217,6 +241,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     ## cΣ collection
     report_file = open(report_filename, "a+")
     write(report_file, "Beginning Adaptation Phase 3 of 4 (covariance collection) at $(Dates.now())\n")
+    close(report_file)
 
     reset_adapt!(model)
     model.state.adapt = true
@@ -235,6 +260,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     ## final scaling
     report_file = open(report_filename, "a+")
     write(report_file, "Beginning Adaptation Phase 4 of 4 (final scaling) at $(Dates.now())\n")
+    close(report_file)
 
     model.state.adapt = false
     reset_adapt!(model)
@@ -254,11 +280,17 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             too_low = accptr[h] < accptr_bnds[1]
             too_high = accptr[h] > accptr_bnds[2]
 
-            if too_low
-                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[1]
-            elseif too_high
-                model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[2]
-            else
+            model.state.cSig_ηlδx[h] *= adjust_from_accptr(accptr[h], target, adjust_bnds)
+
+            # if too_low
+            #     model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[1]
+            # elseif too_high
+            #     model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[2]
+            # else
+            #     fails[h] = false
+            # end
+
+            if !too_low && !too_high
                 fails[h] = false
             end
         end
@@ -266,6 +298,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     end
 
     # mcmc! closes the report file
+    # close(report_file)
     reset_adapt!(model)
     model.state.adapt = false
 
