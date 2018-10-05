@@ -160,6 +160,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             report_file = open(report_filename, "a+")
             write(report_file, "\n\nExceeded maximum adaptation attempts, Phase 1\n\n")
             close(report_file)
+            break
         end
         # tries <= maxtries || throw(error("Exceeded maximum adaptation attempts."))
 
@@ -205,6 +206,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                     report_file = open(report_filename, "a+")
                     write(report_file, "\n\nExceeded maximum adaptation attempts, Phase 2\n\n")
                     close(report_file)
+                    break
                 end
 
                 sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
@@ -288,6 +290,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             report_file = open(report_filename, "a+")
             write(report_file, "\n\nExceeded maximum adaptation attempts, Phase 4\n\n")
             close(report_file)
+            break
         end
 
         sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
