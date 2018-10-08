@@ -219,6 +219,8 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
                     if too_low || too_high
 
+                        fails[h] = true
+
                         tmp = Matrix(model.state.cSig_ηlδx[h])
                         σ = sqrt.(LinearAlgebra.diag(tmp))
                         ρ = StatsBase.cov2cor(tmp, σ)
@@ -302,6 +304,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             too_high = accptr[h] > accptr_bnds[2]
 
             if too_low || too_high
+                fails[h] = true
                 model.state.cSig_ηlδx[h] *= adjust_from_accptr(accptr[h], target, adjust_bnds)
             else
                 fails[h] = false
@@ -318,6 +321,10 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         end
 
     end
+
+    report_file = open(report_filename, "a+")
+    write(report_file, "\n\nAdaptation concluded at $(Dates.now())\n\n")
+    close(report_file)
 
     # mcmc! closes the report file
     # close(report_file)
