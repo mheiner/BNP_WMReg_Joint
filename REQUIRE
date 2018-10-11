@@ -4,8 +4,13 @@
 # If no REQUIRE file is present, it means there are no requirements.
 # See README.md for more details.
 julia 0.7
+
+Dates
+LinearAlgebra
 SpecialFunctions
+
 Distributions
 PDMats
 StatsBase
+
 BayesInference

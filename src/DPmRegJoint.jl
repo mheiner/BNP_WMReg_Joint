@@ -1,12 +1,12 @@
 module DPmRegJoint
 
+using Dates
+using LinearAlgebra
 using SpecialFunctions
+
 using Distributions
 using PDMats
 using StatsBase
-
-using LinearAlgebra
-using Dates
 
 using BayesInference # personal package
 

@@ -1,0 +1,13 @@
+name = "DPmRegJoint"
+uuid = "dd2e0ace-cd18-11e8-09d7-894d176eb2bf"
+authors = ["Matt Heiner <mheiner@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+BayesInference = "674fc506-cd11-11e8-249e-83dc12bc047a"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+PDMats = "90014a1f-27ba-587c-ab20-58faa44d9150"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
