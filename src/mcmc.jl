@@ -49,10 +49,6 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
                 end
             end
 
-            if updatevars.S
-                update_alloc!(model, yX)
-            end
-
             if updatevars.lω
                 update_vlω_mvSlice!(model)
             end
@@ -66,9 +62,21 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
                 update_G0!(model)
             end
 
+            ## do last, followed by llik calculation
+            if updatevars.S
+                llik_num_mat = update_alloc!(model, yX)
+            else
+                llik_num_mat = llik_numerator(yX, model.K, model.H,
+                        model.state.μ_y, model.state.β_y, model.state.δ_y,
+                        model.state.μ_x, model.state.β_x, model.state.δ_x, model.state.lω)
+            end
+            model.state.llik = llik_DPmRegJoint(llik_num_mat, model.state.lωNX_vec)
+
+
             model.state.iter += 1
             if model.state.iter % report_freq == 0
                 write(report_file, "Iter $(model.state.iter) at $(Dates.now())\n")
+                write(report_file, "Log-likelihood $(model.state.llik)\n")
                 write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n\n")
                 prev_accpt = copy(model.state.accpt)
             end
@@ -94,6 +102,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
         end
 
         sims.n_occup[i] = samptypes[2](model.state.n_occup)
+        sims.llik[i] = float(samptypes[1])(model.state.llik)
 
         if monitor.G0
             sims.β0star_ηy[i,:] = Array{samptypes[1]}(model.state.β0star_ηy)    # nsim by K+1 matrix
