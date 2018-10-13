@@ -8,8 +8,8 @@ version = "0.2.3"
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[BayesInference]]
-deps = ["Distributions", "PDMats", "SpecialFunctions", "StatsBase"]
-git-tree-sha1 = "b6485abb7be1f148974a4db0fbcabd25f8d77cae"
+deps = ["Distributions", "LinearAlgebra", "PDMats", "SpecialFunctions", "StatsBase"]
+git-tree-sha1 = "339ea56df1d148c2c99e3cb0dc99c7330a70403f"
 repo-rev = "master"
 repo-url = "https://bitbucket.org/mheiner/BayesInference.jl"
 uuid = "674fc506-cd11-11e8-249e-83dc12bc047a"
@@ -29,9 +29,9 @@ version = "0.5.1"
 
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
-git-tree-sha1 = "ff2595695fc4f14427358ce2593f867085c45dcb"
+git-tree-sha1 = "2d9e14d19bad3f9ad5cc5e4cffabc3cfa59de825"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "1.2.0"
+version = "1.3.0"
 
 [[DataStructures]]
 deps = ["InteractiveUtils", "OrderedCollections", "REPL", "Random", "Serialization", "Test"]

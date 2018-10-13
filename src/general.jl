@@ -17,6 +17,11 @@ mutable struct State_DPmRegJoint
     β_x::Union{Array{Array{Float64, 2}, 1}, Nothing}  # vector of H by (k in (K-1):1) matrices
     δ_x::Array{Float64,2}   # H by K matrix
 
+    # variable selection
+    γ::Union{BitArray{1}, BitArray{1}} # K vector (for global, H by K matrix for local)
+    γδc::Array{Float64, 1} # scale factors for δ_x
+    π_γ::Array{Float64, 1} # K vector of probabilities that γ_k = 1 (true in code)
+
     # allocation states, weights
     S::Array{Int, 1}        # n vector
     lω::Array{Float64, 1}   # H vector
@@ -53,21 +58,22 @@ mutable struct State_DPmRegJoint
     llik::Float64
 
     # for coninuing an adapt phase
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
     adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, llik) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+        γ, γδc, π_γ,
         S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
         adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, length(unique(S)), llik)
 
     # for starting new
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
-    cSig_ηlδx, adapt) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    cSig_ηlδx, adapt) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         0, zeros(Int, length(lω)), cSig_ηlδx,
@@ -79,10 +85,10 @@ mutable struct State_DPmRegJoint
         length(unique(S)), 0.0 )
 
     # for starting new but not adapting
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
-    iter, accpt, cSig_ηlδx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    iter, accpt, cSig_ηlδx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
@@ -92,7 +98,7 @@ mutable struct State_DPmRegJoint
 end
 
 function Base.copy(s::State_DPmRegJoint)
-    State_DPmRegJoint(s.μ_y, s.β_y, s.δ_y, s.μ_x, s.β_x, s.δ_x,
+    State_DPmRegJoint(s.μ_y, s.β_y, s.δ_y, s.μ_x, s.β_x, s.δ_x, s.γ, s.γδc, s.π_γ,
     s.S, s.lω, s.α, s.β0star_ηy, s.Λ0star_ηy, s.ν_δy, s.s0_δy, s.μ0_μx, s.Λ0_μx,
     s.β0_βx, s.Λ0_βx, s.ν_δx, s.s0_δx,
     s.iter, s.accpt, s.cSig_ηlδx,
@@ -102,6 +108,8 @@ end
 mutable struct Prior_DPmRegJoint
     α_sh::Float64   # gamma shape
     α_rate::Float64 # gamma rate
+
+    π_sh::Array{Float64, 2} # Beta shape parameters
 
     β0star_ηy_mean::Array{Float64, 1}   # MVN mean vector
     β0star_ηy_Cov::PDMat{Float64}       # MVN covariance matrix
@@ -131,13 +139,13 @@ mutable struct Prior_DPmRegJoint
     s0_δx_s0::Array{Float64, 1}   # vector of scaled inv. chi-square harmonic mean
 
     ## full spec
-    Prior_DPmRegJoint(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov,
+    Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
     β0star_ηy_Prec, Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, μ0_μx_Prec, Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov,
     β0_βx_Prec,
     Λ0_βx_df, Λ0_βx_S0,
-    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov,
+    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
     β0star_ηy_Prec, Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, μ0_μx_Prec, Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov,
@@ -146,11 +154,11 @@ mutable struct Prior_DPmRegJoint
     s0_δx_df, s0_δx_s0)
 
     ## automatic creation of precision matrices from covariance matrices
-    Prior_DPmRegJoint(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov,
+    Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
     Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov, Λ0_βx_df, Λ0_βx_S0,
-    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, β0star_ηy_mean, β0star_ηy_Cov, inv(β0star_ηy_Cov),
+    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov, inv(β0star_ηy_Cov),
     Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, inv(μ0_μx_Cov), Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov,
@@ -160,7 +168,7 @@ mutable struct Prior_DPmRegJoint
 end
 
 function Base.copy(p::Prior_DPmRegJoint)
-    Prior_DPmRegJoint(p.α_sh, p.α_rate, p.β0star_ηy_mean, p.β0star_ηy_Cov,
+    Prior_DPmRegJoint(p.α_sh, p.α_rate, p.π_sh, p.β0star_ηy_mean, p.β0star_ηy_Cov,
     p.β0star_ηy_Prec, p.Λ0star_ηy_df, p.Λ0star_ηy_S0, p.s0_δy_df, p.s0_δy_s0,
     p.μ0_μx_mean, p.μ0_μx_Cov, p.μ0_μx_Prec, p.Λ0_μx_df, p.Λ0_μx_S0,
     p.β0_βx_mean, p.β0_βx_Cov,
@@ -172,22 +180,23 @@ end
 # default
 function Prior_DPmRegJoint(K::Int, H::Int)
 
-    Prior_DPmRegJoint(1.0, # α_sh
+    Prior_DPmRegJoint(3.0, # α_sh
     1.0, # α_rate
+    fill(0.5, K, 2), # π_sh
     zeros(K+1), # β0star_ηy_mean
-    PDMat(Matrix(Diagonal(fill(1.0, K+1)))), # β0star_ηy_Cov
-    1.0*(K+1+2), # Λ0star_ηy_df
-    PDMat(Matrix(Diagonal(fill(1.0, K+1)))), # Λ0star_ηy_S0
+    PDMat(Matrix(Diagonal(vcat(9.0, fill(1.0, K))))), # β0star_ηy_Cov
+    5.0*(K+1+2), # Λ0star_ηy_df
+    PDMat(Matrix(Diagonal(fill(9.0, K+1)))), # Λ0star_ηy_S0
     5.0, # s0_δy_df
-    1.0, # s0_δy_s0
+    0.1, # s0_δy_s0
     zeros(K), # μ0_μx_mean
-    PDMat(Matrix(Diagonal(fill(1.0, K)))), # μ0_μx_Cov
-    1.0*(K+2), # Λ0_μx_df
-    PDMat(Matrix(Diagonal(fill(1.0, K)))), # Λ0_μx_S0
+    PDMat(Matrix(Diagonal(fill(9.0, K)))), # μ0_μx_Cov
+    5.0*(K+2), # Λ0_μx_df
+    PDMat(Matrix(Diagonal(fill(9.0, K)))), # Λ0_μx_S0
     (K > 1 ? [zeros(k) for k = (K-1):-1:1] : nothing), # β0_βx_mean
-    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(1.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
-    (K > 1 ? fill(1.0*(K+2), K-1) : nothing), # Λ0_βx_df
-    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(1.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
+    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(9.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
+    (K > 1 ? fill(5.0*(K+2), K-1) : nothing), # Λ0_βx_df
+    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(9.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
     fill(5.0, K), # s0_δx_df
     fill(1.0, K))
 
@@ -218,7 +227,9 @@ function Model_DPmRegJoint(y::Array{Float64, 1}, X::Array{Float64, 2},
     H::Int, prior::Prior_DPmRegJoint, state::State_DPmRegJoint)
 
     n = length(y)
-    K = size(X, 2)
+    nx, K = size(X)
+
+    n == nx || throw(error("X and y size mismatch."))
 
     indx_ηy = Dict( :μ => 1, :β => 2:(K+1), :δ => K+2 )
 
@@ -241,51 +252,9 @@ function Model_DPmRegJoint(y::Array{Float64, 1}, X::Array{Float64, 2},
         indx_ηy, indx_ηx, indx_β_x, state)
 end
 
-mutable struct PostSims_DPmRegJoint
-    μ_y::Array{<:Real, 2}  # nsim by H matrix
-    β_y::Array{<:Real, 3}  # nsim by H by K array
-    δ_y::Array{<:Real, 2}  # nsim by H matrix
-    μ_x::Array{<:Real, 3}  # nsim by H by K array
-    β_x::Union{Array{Array{<:Real, 3}, 1}, Nothing}    # vector of nsim by H by (k in (K-1):1) arrays
-    δ_x::Array{<:Real,3}   # nsim by H by K array
-
-    # weights, alpha
-    lω::Array{<:Real, 2}   # nsim by H matrix
-    α::Array{<:Real, 1}    # nsim vector
-
-    # states
-    S::Array{<:Integer, 2}      # nsim by n matrix
-
-    # G0
-    β0star_ηy::Array{<:Real, 2}    # nsim by K+1 matrix
-    Λ0star_ηy::Array{<:Real, 2}    # nsim by length(vech) matrix
-
-    ν_δy::Array{<:Real, 1}     # nsim vector
-    s0_δy::Array{<:Real, 1}    # nsim vector
-
-    μ0_μx::Array{<:Real, 2}    # nsim by K matrix
-    Λ0_μx::Array{<:Real, 2}    # nsim by length(vech) matrix
-
-    β0_βx::Union{Array{Array{<:Real, 2}, 1}, Nothing}  # vector of nsim by (k in (K-1):1) matrices
-    Λ0_βx::Union{Array{Array{<:Real, 2}, 1}, Nothing}  # vector of nsim by length(vech) matrices
-
-    ν_δx::Array{<:Real, 2}     # nsim by K matrix
-    s0_δx::Array{<:Real, 2}    # nsim by K matrix
-
-    n_occup::Array{<:Integer, 1} # nsim vector
-    llik::Array{<:Real, 1} # nsim vector
-
-PostSims_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-lω, α, S,
-β0star_ηy, Λ0star_ηy, ν_δy, s0_δy,
-μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx, n_occup, llik) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-lω, α, S,
-β0star_ηy, Λ0star_ηy, ν_δy, s0_δy,
-μ0_μx, Λ0_μx, β0_βx, Λ0_βx, ν_δx, s0_δx, n_occup, llik)
-end
-
 mutable struct Monitor_DPmRegJoint
     ηlω::Bool
+    γ::Bool
     S::Bool
     G0::Bool
 end
@@ -293,33 +262,38 @@ end
 mutable struct Updatevars_DPmRegJoint
     η::Bool
     lω::Bool
+    γ::Bool
     α::Bool
     S::Bool
     G0::Bool
 end
 
-PostSims_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, n::Int, K::Int, H::Int, samptypes::Tuple) = PostSims_DPmRegJoint(
-(m.ηlω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # μ_y
-(m.ηlω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # β_y
-(m.ηlω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # δ_y
-(m.ηlω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # μ_x
-(m.ηlω && K > 1 ? [ Array{samptypes[1], 3}(undef, n_keep, H, k) for k = (K-1):-1:1 ] : nothing ), # β_x
-(m.ηlω ? Array{samptypes[1], 3}(undef, n_keep, H, K) : Array{samptypes[1], 3}(undef, 0, 0, 0)), # δ_x
-(m.ηlω ? Array{samptypes[1], 2}(undef, n_keep, H) : Array{samptypes[1], 2}(undef, 0, 0)), # lω
-(m.ηlω ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # α
-(m.S ? Array{samptypes[2], 2}(undef, n_keep, n) : Array{samptypes[2], 2}(undef, 0, 0)), # S
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K+1) : Array{samptypes[1], 2}(undef, 0, 0)), # β0star_ηy
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, Int((K+1)*(K+2)/2)) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0star_ηy
-(m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # ν_δy
-(m.G0 ? Array{samptypes[1], 1}(undef, n_keep) : Array{samptypes[1], 1}(undef, 0)), # s0_δy
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # μ0_μx
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, Int((K)*(K+1)/2)) : Array{samptypes[1], 2}(undef, 0, 0)), # Λ0_μx
-(m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, k) for k = (K-1):-1:1 ] : nothing ), # β0_βx
-(m.G0 && K > 1 ? [ Array{samptypes[1], 2}(undef, n_keep, Int(k*(k+1)/2)) for k = (K-1):-1:1 ] : nothing ), # Λ0_βx
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # ν_δx
-(m.G0 ? Array{samptypes[1], 2}(undef, n_keep, K) : Array{samptypes[1], 2}(undef, 0, 0)), # s0_δx
-Array{samptypes[2], 1}(undef, n_keep), # n_occup
-Array{samptypes[1], 1}(undef, n_keep) ) # llik
+function postSimsInit_DPmRegJoint(m::Monitor_DPmRegJoint, n_keep::Int, init_state::State_DPmRegJoint)
+
+    symb = [ :n_occup, :llik ]
+
+    if m.ηlω
+        push!(symb, [:μ_y, :β_y, :δ_y, :μ_x, :β_x, :δ_x, :lω, :α]...)
+    end
+
+    if m.γ
+        push!(symb, [:γ, :π_γ]...)
+    end
+
+    if m.S
+        push!(symb, :S)
+    end
+
+    if m.G0
+        push!(symb, [:β0star_ηy, :Λ0star_ηy, :s0_δy,
+                     :μ0_μx, :Λ0_μx, :β0_βx, :Λ0_βx, :s0_δx]...)
+    end
+
+    sims = fill( BayesInference.deepcopyFields(init_state, symb), n_keep )
+
+    return sims, symb
+end
+
 
 function lNXmat(X::Array{T, 2}, μ::Array{T, 2}, β::Array{Array{T, 2}, 1}, δ::Array{T, 2}) where T <: Real
     hcat( [lNX_sqfChol( Matrix(X'), μ[h,:], [ β[k][h,:] for k = 1:(size(X,2)-1) ], δ[h,:] )
@@ -328,6 +302,8 @@ end
 function lNXmat(x::Union{Array{T,1}, Array{T,2}},
                 μ::Union{Array{T,1}, Array{T,2}},
                 δ::Union{Array{T,1}, Array{T,2}}) where T <: Real
+    # K = 1 case
+
     x = vec(x)
     μ = vec(μ)
     δ = vec(δ)
@@ -349,9 +325,40 @@ function reset_adapt!(model::Model_DPmRegJoint)
 end
 
 function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
-    prior::Prior_DPmRegJoint, random::Bool=false)
+    prior::Prior_DPmRegJoint, random::Bool=true, γglobal::Bool=true)
 
     if random
+        s0_δx = [ rand(InverseGamma(prior.s0_δx_df[k]/2.0, prior.s0_δx_df[k]*prior.s0_δx_s0[k]/2.0)) for k = 1:K ]
+        ν_δx = fill(5.0, K)
+        Λ0_βx = ( K > 1 ? [ PDMat(rand(Wishart(prior.Λ0_βx_df[k], inv(prior.Λ0_βx_S0[k])/prior.Λ0_βx_df[k]))) for k = 1:(K-1) ] : nothing)
+        β0_βx = ( K > 1 ? [ rand(MvNormal(prior.β0_βx_mean[k], prior.β0_βx_Cov[k])) for k = 1:(K-1) ] : nothing)
+        Λ0_μx = PDMat( rand( Wishart(prior.Λ0_μx_df, inv(prior.Λ0_μx_S0)/prior.Λ0_μx_df) ) )
+        μ0_μx = rand(MvNormal(prior.μ0_μx_mean, prior.μ0_μx_Cov))
+        s0_δy = rand(InverseGamma(prior.s0_δy_df/2.0, prior.s0_δy_df*prior.s0_δy_s0/2.0))
+        ν_δy = 5.0
+        Λ0star_ηy = PDMat( rand( Wishart(prior.Λ0star_ηy_df, inv(prior.Λ0star_ηy_S0)/prior.Λ0star_ηy_df) ) )
+        β0star_ηy = rand( MvNormal(prior.β0star_ηy_mean, prior.β0star_ηy_Cov) )
+        α = rand(Gamma(prior.α_sh, 1.0/prior.α_rate))
+        lω = log.(fill(1.0 / H, H)) # start with equal weights
+        S = [ sample(Weights(ones(H))) for i = 1:n ] # random allocation
+
+        if γglobal
+            γ = trues(K) # always start with all variables
+        else
+            γ = trues(H, K)
+        end
+
+        γδc = fill(1.0e6, K)
+        π_γ = fill(0.5, K)
+
+        δ_x = [ rand(InverseGamma(ν_δx[k]/2.0, ν_δx[k]*s0_δx[k]/2.0)) for h=1:H, k=1:K ]
+
+        β_x = ( K > 1 ? [ vcat( [rand(MvNormal(β0_βx[k], inv(Λ0_βx[k]))) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
+
+        μ_x = vcat([ rand(MvNormal(μ0_μx, inv(Λ0_μx))) for h = 1:H ]'...)
+        δ_y = rand( InverseGamma(ν_δy/2.0, ν_δy*s0_δy/2.0), H )
+        β_y = vcat([ rand(MvNormal(β0star_ηy[2:(K+1)], inv(Λ0star_ηy).mat[2:(K+1), 2:(K+1)])) for h = 1:H ]'...)
+        μ_y = rand( Normal(β0star_ηy[1], sqrt(inv(Λ0star_ηy).mat[1,1])), H)
     else
         s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
         ν_δx = fill(5.0, K)
@@ -367,6 +374,15 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         lω = log.(fill(1.0 / H, H))
         S = [ sample(Weights(ones(H))) for i = 1:n ]
 
+        if γglobal
+            γ = trues(K)
+        else
+            γ = trues(H, K)
+        end
+
+        γδc = 1.0e6
+        π_γ = fill(0.5, K)
+
         δ_x = vcat([ copy(s0_δx) for h = 1:H ]'...)
 
         β_x = ( K > 1 ? [ vcat( [copy(β0_βx[k]) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
@@ -380,7 +396,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
     cSig_ηlδx = [ PDMat(Matrix(Diagonal(fill(1.0, Int(K+K*(K+1)/2))))) for h = 1:H ]
     adapt = false
 
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         cSig_ηlδx, adapt)

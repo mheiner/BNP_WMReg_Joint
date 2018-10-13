@@ -7,8 +7,8 @@ mcmc_DPmRegJoint!(model, n_keep[, monitor, report_filename="out_progress.txt",
 thin=1, report_freq=10000, samptypes])
 """
 function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
-    updatevars::Updatevars_DPmRegJoint=Updatevars_DPmRegJoint(true, true, true, true, true),
-    monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false),
+    updatevars::Updatevars_DPmRegJoint=Updatevars_DPmRegJoint(true, true, false, true, true, true),
+    monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false, false),
     report_filename::String="out_progress.txt", thin::Int=1,
     report_freq::Int=100, samptypes=(Float32, Int32))
 
@@ -16,7 +16,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     report_file = open(report_filename, "a+")
     write(report_file, "Commencing MCMC at $(Dates.now()) for $(n_keep * thin) iterations.\n")
 
-    sims = PostSims_DPmRegJoint(monitor, n_keep, model.n, model.K, model.H, samptypes)
+    sims, symb_monitor = postSimsInit_DPmRegJoint(monitor, n_keep, model.state)
     start_accpt = copy(model.state.accpt)
     start_iter = copy(model.state.iter)
     prev_accpt = copy(model.state.accpt) # set every report_freq iterations
@@ -49,13 +49,17 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
                 end
             end
 
+            if updatevars.γ
+                update_γ!(model)
+            end
+
             if updatevars.lω
                 update_vlω_mvSlice!(model)
             end
 
             if updatevars.α
                 model.state.α = rand(BayesInference.post_alphaDP(model.H, model.state.lω[model.H],
-                model.prior.α_sh, model.prior.α_rate))
+                    model.prior.α_sh, model.prior.α_rate))
             end
 
             if updatevars.G0
@@ -82,48 +86,8 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
             end
         end
 
-        if monitor.ηlω
-            sims.μ_y[i,:] = Array{samptypes[1]}(model.state.μ_y)  # nsim by H matrix
-            sims.β_y[i,:,:] = Array{samptypes[1]}(model.state.β_y) # nsim by H by K array
-            sims.δ_y[i,:] = Array{samptypes[1]}(model.state.δ_y)  # nsim by H matrix
-            sims.μ_x[i,:,:] = Array{samptypes[1]}(model.state.μ_x)  # nsim by H by K array
-            if model.K > 1
-                for k = 1:(model.K-1)
-                    sims.β_x[k][i,:,:] = Array{samptypes[1]}(model.state.β_x[k])   # vector of nsim by H by (k in (K-1):1) arrays
-                end
-            end
-            sims.δ_x[i,:,:] = Array{samptypes[1]}(model.state.δ_x)   # nsim by H by K array
-            sims.lω[i,:] = Array{samptypes[1]}(model.state.lω)   # nsim by H matrix
-            sims.α[i] = float(samptypes[1])(model.state.α)    # nsim vector
-        end
+        sims[i] = BayesInference.deepcopyFields(model.state, symb_monitor)
 
-        if monitor.S
-            sims.S[i,:] = Array{samptypes[2]}(model.state.S)     # nsim by n matrix
-        end
-
-        sims.n_occup[i] = samptypes[2](model.state.n_occup)
-        sims.llik[i] = float(samptypes[1])(model.state.llik)
-
-        if monitor.G0
-            sims.β0star_ηy[i,:] = Array{samptypes[1]}(model.state.β0star_ηy)    # nsim by K+1 matrix
-            sims.Λ0star_ηy[i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0star_ηy), true))    # nsim by length(vech) matrix
-
-            sims.ν_δy[i] = float(samptypes[1])(model.state.ν_δy)    # nsim vector; THIS IS ACTUALLY A FIXED QUANTITY
-            sims.s0_δy[i] = float(samptypes[1])(model.state.s0_δy)    # nsim vector
-
-            sims.μ0_μx[i,:] = Array{samptypes[1]}(model.state.μ0_μx)    # nsim by K matrix
-            sims.Λ0_μx[i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0_μx), true))     # nsim by length(vech) matrix
-
-            if model.K > 1
-                for k = 1:(model.K-1)
-                    sims.β0_βx[k][i,:] = Array{samptypes[1]}(model.state.β0_βx[k])  # vector of nsim by (k in (K-1):1) matrices
-                    sims.Λ0_βx[k][i,:] = Array{samptypes[1]}(BayesInference.vech(Matrix(model.state.Λ0_βx[k]), true))  # vector of nsim by length(vech) matrices
-                end
-            end
-
-            sims.ν_δx[i,:] = Array{samptypes[1]}(model.state.ν_δx)     # nsim by K matrix; THIS IS ACTUALLY A FIXED QUANTITY
-            sims.s0_δx[i,:] = Array{samptypes[1]}(model.state.s0_δx)    # nsim by K matrix
-        end
     end
 
     close(report_file)
@@ -171,11 +135,10 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             close(report_file)
             break
         end
-        # tries <= maxtries || throw(error("Exceeded maximum adaptation attempts."))
 
         sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale,
         updatevars,
-        Monitor_DPmRegJoint(false, false, false),
+        Monitor_DPmRegJoint(false, false, false, false),
         report_filename, 1, 100)
 
         for h = 1:model.H
@@ -201,8 +164,6 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     for ii = 1:3
 
         for group in keys(model.indx_ηx)
-            # println(model.indx_ηx[group])
-            # end
 
             ig = model.indx_ηx[group]
 
@@ -219,7 +180,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                 end
 
                 sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
-                Monitor_DPmRegJoint(false, false, false),
+                Monitor_DPmRegJoint(false, false, false, false),
                 report_filename, 1, 100)
 
                 for h = 1:model.H
@@ -243,19 +204,6 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                         fails[h] = false
                     end
 
-                    # if too_low
-                    #     σ[ig] = σ[ig] * adjust[1]
-                    #     tmp = StatsBase.cor2cov(ρ, σ)
-                    #     tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
-                    #     model.state.cSig_ηlδx[h] = PDMat(tmp)
-                    # elseif too_high
-                    #     σ[ig] = σ[ig] * adjust[2]
-                    #     tmp = StatsBase.cor2cov(ρ, σ)
-                    #     tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
-                    #     model.state.cSig_ηlδx[h] = PDMat(tmp)
-                    # else
-                    #     fails[h] = false
-                    # end
                 end
 
             end
@@ -273,7 +221,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     model.state.adapt = true
 
     sims, accptr = mcmc_DPmRegJoint!(model, n_iter_collectSS, updatevars,
-    Monitor_DPmRegJoint(false, false, false),
+    Monitor_DPmRegJoint(false, false, false, false),
     report_filename, 1, 100)
 
     for h = 1:model.H
@@ -305,7 +253,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         end
 
         sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
-        Monitor_DPmRegJoint(false, false, false),
+        Monitor_DPmRegJoint(false, false, false, false),
         report_filename, 1, 100)
 
         for h = 1:model.H
@@ -319,14 +267,6 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                 fails[h] = false
             end
 
-            # if too_low
-            #     model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[1]
-            # elseif too_high
-            #     model.state.cSig_ηlδx[h] = model.state.cSig_ηlδx[h] * adjust[2]
-            # else
-            #     fails[h] = false
-            # end
-
         end
 
     end
@@ -335,8 +275,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     write(report_file, "\n\nAdaptation concluded at $(Dates.now())\n\n")
     close(report_file)
 
-    # mcmc! closes the report file
-    # close(report_file)
+    ## note that mcmc! also closes the report file
     reset_adapt!(model)
     model.state.adapt = false
 

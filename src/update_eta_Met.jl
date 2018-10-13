@@ -23,9 +23,12 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
+    βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_old, model.state.δ_x[h,:],
+                                              model.state.γ, model.state.γδc)
+
     ## Compute lωNX_vec for candidate
     lNX_mat_cand = copy(model.state.lNX)
-    lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, β_x_h_cand, δ_x_h_cand )
+    lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand )
     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
 
     if n_h == 0
@@ -74,7 +77,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
 
             y_h = model.y[indx_h] # doesn't need to copy if indexing (result of call to getindex)
             X_h = model.X[indx_h,:]
-            D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:])
+            D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], model.state.γ)
 
             Λ1star_ηy_h_old = PDMat(D_h_old'D_h_old + model.state.Λ0star_ηy)
             β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
@@ -84,7 +87,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
 
             ## Important quantities for candidate
-            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand)
+            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
 
             Λ1star_ηy_h_cand = PDMat(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
             β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
@@ -93,7 +96,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
             b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
 
-            ## Compute acceptance ratio
+            ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified βx and δx)
             lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
                 model.state, μ_x_h_cand, β_x_h_cand, lδ_x_h_cand,
                 Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
@@ -166,9 +169,12 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
+    δγ_x_h_cand = δ_x_h_modify_γ(model.state.δ_x[h,:],
+                               model.state.γ, model.state.γδc)
+
     ## Compute lωNX_vec for candidate
     lNX_mat_cand = copy(model.state.lNX)
-    lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
+    lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
 
     if n_h == 0
@@ -214,7 +220,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
 
             y_h = model.y[indx_h] # doesn't need to copy if indexing (result of call to getindex)
             X_h = model.X[indx_h,:]
-            D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:])
+            D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], model.state.γ)
 
             Λ1star_ηy_h_old = PDMat(D_h_old'D_h_old + model.state.Λ0star_ηy)
             β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
@@ -224,7 +230,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
 
             ## Important quantities for candidate
-            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand)
+            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
 
             Λ1star_ηy_h_cand = PDMat(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
             β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
@@ -233,7 +239,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
             b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
 
-            ## Compute acceptance ratio
+            ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified δx)
             lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
                 model.state, μ_x_h_cand[1], lδ_x_h_cand[1],
                 Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
@@ -289,6 +295,12 @@ end
 
 function construct_Dh(h::Int, Xh::Array{T, 2}, μ_x_h::Array{T, 1}) where T <: Real
     D0 = broadcast(-, μ_x_h, Xh')'
+    return hcat( ones(size(Xh,1)), D0 )
+end
+function construct_Dh(h::Int, Xh::Array{T, 2}, μ_x_h::Array{T, 1},
+                      γ::BitArray{1}) where T <: Real
+    D0 = broadcast(-, μ_x_h, Xh')'
+    D0[:, findall(.!(γ))] *= 0.0
     return hcat( ones(size(Xh,1)), D0 )
 end
 
@@ -372,4 +384,39 @@ function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_v
 
     return Q1 - Q2 + Q3 - 0.5*Q4 - (a1_δy)*Q5
 
+end
+
+
+function βδ_x_h_modify_γ(β_x::Array{Array{T, 1}, 1}, δ_x::Array{T, 1},
+                        γ::BitArray{1}, γδc::Array{T, 1}) where T <: Real
+    modify_indx = findall(.!(γ))
+    K = length(γ)
+
+    βout = deepcopy(β_x)
+    δout = copy(δ_x)
+
+    for k in modify_indx # this works even if no modifications are necessary
+        δout[k] += γδc[k]
+    end
+
+    for k = 1:(K-1)
+        if !γ[k]
+            βout[k] *= 0.0
+        else
+            modify2 = intersect((k+1):K, modify_indx)
+            βout[k][(modify2 .- k)] *= 0.0
+        end
+    end
+
+    return βout, δout
+end
+function δ_x_h_modify_γ(δ_x::Array{T, 1},
+                      γ::BitArray{1}, γδc::Array{T, 1}) where T <: Real
+    modify_indx = findall(.!(γ))
+    δout = copy(δ_x)
+
+    for k in modify_indx # this works even if no modifications are necessary
+        δout[k] *= γδc[k]
+    end
+    return δout
 end
