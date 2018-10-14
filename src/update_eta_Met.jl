@@ -1,5 +1,7 @@
 # update_eta_Met.jl
 
+export βδ_x_h_modify_γ, δ_x_h_modify_γ;
+
 # pre_compute Λ0star_ηy*β0star_ηy and β0star_ηy'Λ0star_ηy*β0star_ηy which are not indexed by h
 function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
 

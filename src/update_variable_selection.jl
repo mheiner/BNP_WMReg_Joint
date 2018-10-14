@@ -1,5 +1,7 @@
 # update_variable_selection.jl
 
+export βδ_x_modify_γ, δ_x_modify_γ;
+
 function ldens_y(model::Model_DPmRegJoint, γ_cand::BitArray{1})
 
     lNy = zeros(typeof(model.y[1]), model.n)
@@ -8,7 +10,7 @@ function ldens_y(model::Model_DPmRegJoint, γ_cand::BitArray{1})
     for i = 1:model.n
         μ = model.state.μ_y[model.state.S[i]]
         for k in γcand_indx
-            μ -= β_y[model.state.S[i], k] * (model.state.μ_x[model.state.S[i], k] - model.X[i,k])
+            μ -= model.state.β_y[model.state.S[i], k] * (model.state.μ_x[model.state.S[i], k] - model.X[i,k])
         end
         lNy[i] += logpdf(Normal(μ, sqrt(model.state.δ_y[model.state.S[i]])), model.y[i])
     end
@@ -26,7 +28,7 @@ function βδ_x_modify_γ(β_x::Array{Array{T, 2}, 1}, δ_x::Array{T, 2},
     δout = deepcopy(δ_x) # H by K matrix
 
     for k in modify_indx # this works even if no modifications are necessary
-        δout[:,k] += γδc[k]
+        δout[:,k] .+= γδc[k]
     end
 
     for k = 1:(K-1)
@@ -46,11 +48,19 @@ function δ_x_modify_γ(δ_x::Array{T, 2},
     δout = deepcopy(δ_x)
 
     for k in modify_indx # this works even if no modifications are necessary
-        δout[:,k] *= γδc[k]
+        δout[:,k] .+= γδc[k]
     end
     return δout
 end
+function β_y_modify_γ(β_y::Array{T, 2}, γ::BitArray{1}) where T <: Real
+    modify_indx = findall(.!(γ))
+    βout = deepcopy(β_y)
 
+    for k in modify_indx # this works even if no modifications are necessary
+        βout[:,k] *= 0
+    end
+    return βout
+end
 
 
 function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) where T <: Real

@@ -72,7 +72,8 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
             else
                 llik_num_mat = llik_numerator(yX, model.K, model.H,
                         model.state.μ_y, model.state.β_y, model.state.δ_y,
-                        model.state.μ_x, model.state.β_x, model.state.δ_x, model.state.lω)
+                        model.state.μ_x, model.state.β_x, model.state.δ_x,
+                        model.state.γ, model.state.γδc, model.state.lω)
             end
             model.state.llik = llik_DPmRegJoint(llik_num_mat, model.state.lωNX_vec)
 

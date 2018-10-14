@@ -55,7 +55,7 @@ function update_G0!(model::Model_DPmRegJoint)
 
     βstar_ηy = hcat(model.state.μ_y[ii], model.state.β_y[ii,:])
 
-    model.state.β0star_ηy = rpost_β0star_ηy( βstar_ηy,
+    model.state.β0star_ηy = rpost_β0star_ηy(βstar_ηy,
             model.state.δ_y[ii], model.state.Λ0star_ηy,
             model.prior.β0star_ηy_mean, model.prior.β0star_ηy_Prec)
 

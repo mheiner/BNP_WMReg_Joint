@@ -3,7 +3,7 @@
 export State_DPmRegJoint, init_state_DPmRegJoint,
     Prior_DPmRegJoint, Model_DPmRegJoint,
     Monitor_DPmRegJoint, Updatevars_DPmRegJoint,
-    PostSims_DPmRegJoint, lNXmat, reset_adapt!, copy,
+    PostSims_DPmRegJoint, lNXmat, reset_adapt!,
     llik_DPmRegJoint;
 
 mutable struct State_DPmRegJoint
@@ -57,23 +57,31 @@ mutable struct State_DPmRegJoint
     n_occup::Int
     llik::Float64
 
-    # for coninuing an adapt phase
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+end
+
+### Outer constructors for State_DPmRegJoint
+## for coninuing an adapt phase
+function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
-    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, llik) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
+    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, llik)
+
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
         γ, γδc, π_γ,
         S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
         adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, length(unique(S)), llik)
+end
 
-    # for starting new
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+## for starting new
+function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
-    cSig_ηlδx, adapt) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+    cSig_ηlδx, adapt)
+
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         0, zeros(Int, length(lω)), cSig_ηlδx,
@@ -83,26 +91,21 @@ mutable struct State_DPmRegJoint
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros(Float64, 1, 1), zeros(Float64, 1),
         length(unique(S)), 0.0 )
+end
 
-    # for starting new but not adapting
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+## for starting new but not adapting
+function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
-    iter, accpt, cSig_ηlδx) = new(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+    iter, accpt, cSig_ηlδx)
+
+    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         iter, accpt, cSig_ηlδx,
         false, nothing, nothing, nothing,
         zeros(Float64, 1, 1), zeros(Float64, 1),
         length(unique(S)), 0.0)
-end
-
-function Base.copy(s::State_DPmRegJoint)
-    State_DPmRegJoint(s.μ_y, s.β_y, s.δ_y, s.μ_x, s.β_x, s.δ_x, s.γ, s.γδc, s.π_γ,
-    s.S, s.lω, s.α, s.β0star_ηy, s.Λ0star_ηy, s.ν_δy, s.s0_δy, s.μ0_μx, s.Λ0_μx,
-    s.β0_βx, s.Λ0_βx, s.ν_δx, s.s0_δx,
-    s.iter, s.accpt, s.cSig_ηlδx,
-    s.adapt, s.adapt_iter, s.runningsum_ηlδx, s.runningSS_ηlδx, s.lNX, s.lωNX_vec, s.llik)
 end
 
 mutable struct Prior_DPmRegJoint
@@ -137,47 +140,26 @@ mutable struct Prior_DPmRegJoint
 
     s0_δx_df::Array{Float64, 1}   # vector of scaled inv. chi-square deg. of freedom
     s0_δx_s0::Array{Float64, 1}   # vector of scaled inv. chi-square harmonic mean
+end
 
-    ## full spec
-    Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
-    β0star_ηy_Prec, Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
-    μ0_μx_mean, μ0_μx_Cov, μ0_μx_Prec, Λ0_μx_df, Λ0_μx_S0,
-    β0_βx_mean, β0_βx_Cov,
-    β0_βx_Prec,
-    Λ0_βx_df, Λ0_βx_S0,
-    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
-    β0star_ηy_Prec, Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
-    μ0_μx_mean, μ0_μx_Cov, μ0_μx_Prec, Λ0_μx_df, Λ0_μx_S0,
-    β0_βx_mean, β0_βx_Cov,
-    β0_βx_Prec,
-    Λ0_βx_df, Λ0_βx_S0,
-    s0_δx_df, s0_δx_s0)
-
-    ## automatic creation of precision matrices from covariance matrices
-    Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
+### Outer constructors for Prior_DPmRegJoint
+## automatic creation of precision matrices from covariance matrices
+function Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
     Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov, Λ0_βx_df, Λ0_βx_S0,
-    s0_δx_df, s0_δx_s0) = new(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov, inv(β0star_ηy_Cov),
-    Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
-    μ0_μx_mean, μ0_μx_Cov, inv(μ0_μx_Cov), Λ0_μx_df, Λ0_μx_S0,
-    β0_βx_mean, β0_βx_Cov,
-    ( typeof(β0_βx_Cov) == Nothing ? nothing : [inv(β0_βx_Cov[k]) for k = 1:length(β0_βx_Cov)] ),
-    Λ0_βx_df, Λ0_βx_S0,
     s0_δx_df, s0_δx_s0)
+
+    Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov, inv(β0star_ηy_Cov),
+        Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
+        μ0_μx_mean, μ0_μx_Cov, inv(μ0_μx_Cov), Λ0_μx_df, Λ0_μx_S0,
+        β0_βx_mean, β0_βx_Cov,
+        ( typeof(β0_βx_Cov) == Nothing ? nothing : [inv(β0_βx_Cov[k]) for k = 1:length(β0_βx_Cov)] ),
+        Λ0_βx_df, Λ0_βx_S0,
+        s0_δx_df, s0_δx_s0)
 end
 
-function Base.copy(p::Prior_DPmRegJoint)
-    Prior_DPmRegJoint(p.α_sh, p.α_rate, p.π_sh, p.β0star_ηy_mean, p.β0star_ηy_Cov,
-    p.β0star_ηy_Prec, p.Λ0star_ηy_df, p.Λ0star_ηy_S0, p.s0_δy_df, p.s0_δy_s0,
-    p.μ0_μx_mean, p.μ0_μx_Cov, p.μ0_μx_Prec, p.Λ0_μx_df, p.Λ0_μx_S0,
-    p.β0_βx_mean, p.β0_βx_Cov,
-    p.β0_βx_Prec,
-    p.Λ0_βx_df, p.Λ0_βx_S0,
-    p.s0_δx_df, p.s0_δx_s0)
-end
-
-# default
+## default prior spec
 function Prior_DPmRegJoint(K::Int, H::Int)
 
     Prior_DPmRegJoint(3.0, # α_sh
@@ -219,8 +201,9 @@ mutable struct Model_DPmRegJoint
     state::State_DPmRegJoint # this is the only thing that should change
 
     Model_DPmRegJoint(y, X, n, K, H, prior,
-        indx_ηy, indx_ηx, indx_β_x, state) = new(y, X, n, K, H, copy(prior),
-            indx_ηy, indx_ηx, indx_β_x, copy(state))
+        indx_ηy, indx_ηx, indx_β_x, state) = new(deepcopy(y), deepcopy(X), copy(n),
+        copy(K), copy(H), deepcopy(prior),
+        deepcopy(indx_ηy), deepcopy(indx_ηx), deepcopy(indx_β_x), deepcopy(state))
 end
 
 function Model_DPmRegJoint(y::Array{Float64, 1}, X::Array{Float64, 2},
@@ -248,8 +231,8 @@ function Model_DPmRegJoint(y::Array{Float64, 1}, X::Array{Float64, 2},
         indx_β_x = nothing
     end
 
-    return Model_DPmRegJoint(y, X, n, K, H, prior,
-        indx_ηy, indx_ηx, indx_β_x, state)
+    return Model_DPmRegJoint(deepcopy(y), deepcopy(X), n, K, copy(H), deepcopy(prior),
+        indx_ηy, indx_ηx, indx_β_x, deepcopy(state))
 end
 
 mutable struct Monitor_DPmRegJoint
@@ -365,11 +348,11 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         Λ0_βx = ( K > 1 ? [ inv(prior.Λ0_βx_S0[k]) for k = 1:(K-1) ] : nothing)
         β0_βx = ( K > 1 ? [ prior.β0_βx_mean[k] for k = 1:(K-1) ] : nothing)
         Λ0_μx = inv(prior.Λ0_μx_S0)
-        μ0_μx = copy(prior.μ0_μx_mean)
-        s0_δy = copy(prior.s0_δy_s0)
+        μ0_μx = deepcopy(prior.μ0_μx_mean)
+        s0_δy = deepcopy(prior.s0_δy_s0)
         ν_δy = 5.0
         Λ0star_ηy = inv(prior.Λ0star_ηy_S0)
-        β0star_ηy = copy(prior.β0star_ηy_mean)
+        β0star_ηy = deepcopy(prior.β0star_ηy_mean)
         α = prior.α_sh / prior.α_rate
         lω = log.(fill(1.0 / H, H))
         S = [ sample(Weights(ones(H))) for i = 1:n ]
@@ -383,11 +366,11 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         γδc = 1.0e6
         π_γ = fill(0.5, K)
 
-        δ_x = vcat([ copy(s0_δx) for h = 1:H ]'...)
+        δ_x = vcat([ deepcopy(s0_δx) for h = 1:H ]'...)
 
-        β_x = ( K > 1 ? [ vcat( [copy(β0_βx[k]) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
+        β_x = ( K > 1 ? [ vcat( [deepcopy(β0_βx[k]) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
 
-        μ_x = vcat([ copy(μ0_μx) for h = 1:H ]'...)
+        μ_x = vcat([ deepcopy(μ0_μx) for h = 1:H ]'...)
         δ_y = fill(s0_δy, H)
         β_y = vcat([ β0star_ηy[2:(K+1)] for h = 1:H ]'...)
         μ_y = fill(β0star_ηy[1], H)
@@ -407,10 +390,11 @@ function llik_DPmRegJoint(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_x::Array{T, 2},
     β_x::Union{Array{Array{Float64, 2}, 1}, Nothing},
     δ_x::Array{Float64,2},
+    γ::BitArray{1}, γδc::Array{T, 1},
     lω::Array{T, 1},
     lωNX_vec::Array{T, 1}) where T <: Real
 
-    llik_num_mat = llik_numerator(y, X, K, H, μ_y, β_y, δ_y, μ_x, β_x, δ_x, lω)
+    llik_num_mat = llik_numerator(y, X, K, H, μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, lω)
     return llik_DPmRegJoint(llik_num_mat, lωNX_vec)
 end
 function llik_DPmRegJoint(llik_numerator_mat::Array{T, 2},
