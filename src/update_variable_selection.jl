@@ -8,9 +8,9 @@ function ldens_y(model::Model_DPmRegJoint, γ_cand::BitArray{1})
     γcand_indx = findall(γ_cand) # currently assumes global γ
 
     for i = 1:model.n
-        μ = model.state.μ_y[model.state.S[i]]
+        μ = deepcopy(model.state.μ_y[model.state.S[i]])
         for k in γcand_indx
-            μ -= model.state.β_y[model.state.S[i], k] * (model.state.μ_x[model.state.S[i], k] - model.X[i,k])
+            μ -= model.state.β_y[model.state.S[i], k] * (model.X[i,k] - model.state.μ_x[model.state.S[i], k])
         end
         lNy[i] += logpdf(Normal(μ, sqrt(model.state.δ_y[model.state.S[i]])), model.y[i])
     end
@@ -65,7 +65,7 @@ end
 
 function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) where T <: Real
 
-    γ_alt = copy(model.state.γ)
+    γ_alt = deepcopy(model.state.γ)
     γ_alt[k] = !γ_alt[k]
 
     lNy_alt = ldens_y(model, γ_alt)
@@ -81,8 +81,8 @@ function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) whe
         lNX_alt = lNXmat(model.X, model.state.μ_x, δγ_x_alt) # n by H matrix
     end
 
-    lNx_alt = [ copy(lNX_alt[i, model.state.S[i]]) for i = 1:model.n ]
-    lNx_old = [ copy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
+    lNx_alt = [ deepcopy(lNX_alt[i, model.state.S[i]]) for i = 1:model.n ]
+    lNx_old = [ deepcopy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
 
     lωNX_vec_alt = lωNXvec(model.state.lω, lNX_alt)
 

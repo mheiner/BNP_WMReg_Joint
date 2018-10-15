@@ -29,7 +29,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                                               model.state.γ, model.state.γδc)
 
     ## Compute lωNX_vec for candidate
-    lNX_mat_cand = copy(model.state.lNX)
+    lNX_mat_cand = deepcopy(model.state.lNX)
     lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand )
     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
 
@@ -53,7 +53,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                 model.state.δ_x[h,:] = δ_x_h_cand
 
                 model.state.lNX[:,h] = lNX_mat_cand[:,h]
-                model.state.lωNX_vec = copy(lωNX_vec_cand)
+                model.state.lωNX_vec = deepcopy(lωNX_vec_cand)
 
                 ηlδ_x_out = ηlδ_x_cand
                 model.state.accpt[h] += 1
@@ -117,7 +117,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                 model.state.δ_x[h,:] = δ_x_h_cand
 
                 model.state.lNX[:,h] = lNX_mat_cand[:,h]
-                model.state.lωNX_vec = copy(lωNX_vec_cand)
+                model.state.lωNX_vec = deepcopy(lωNX_vec_cand)
 
                 ηlδ_x_out = ηlδ_x_cand
                 model.state.accpt[h] += 1
@@ -175,7 +175,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
                                model.state.γ, model.state.γδc)
 
     ## Compute lωNX_vec for candidate
-    lNX_mat_cand = copy(model.state.lNX)
+    lNX_mat_cand = deepcopy(model.state.lNX)
     lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
 
@@ -196,7 +196,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
                 model.state.δ_x[h,:] = δ_x_h_cand
 
                 model.state.lNX[:,h] = lNX_mat_cand[:,h]
-                model.state.lωNX_vec = copy(lωNX_vec_cand)
+                model.state.lωNX_vec = deepcopy(lωNX_vec_cand)
 
                 ηlδ_x_out = ηlδ_x_cand
                 model.state.accpt[h] += 1
@@ -256,7 +256,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
                 model.state.δ_x[h,:] = δ_x_h_cand
 
                 model.state.lNX[:,h] = lNX_mat_cand[:,h]
-                model.state.lωNX_vec = copy(lωNX_vec_cand)
+                model.state.lωNX_vec = deepcopy(lωNX_vec_cand)
 
                 ηlδ_x_out = ηlδ_x_cand
                 model.state.accpt[h] += 1
@@ -395,7 +395,7 @@ function βδ_x_h_modify_γ(β_x::Array{Array{T, 1}, 1}, δ_x::Array{T, 1},
     K = length(γ)
 
     βout = deepcopy(β_x)
-    δout = copy(δ_x)
+    δout = deepcopy(δ_x)
 
     for k in modify_indx # this works even if no modifications are necessary
         δout[k] += γδc[k]
@@ -415,7 +415,7 @@ end
 function δ_x_h_modify_γ(δ_x::Array{T, 1},
                       γ::BitArray{1}, γδc::Array{T, 1}) where T <: Real
     modify_indx = findall(.!(γ))
-    δout = copy(δ_x)
+    δout = deepcopy(δ_x)
 
     for k in modify_indx # this works even if no modifications are necessary
         δout[k] *= γδc[k]

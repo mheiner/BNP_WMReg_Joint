@@ -17,9 +17,9 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     write(report_file, "Commencing MCMC at $(Dates.now()) for $(n_keep * thin) iterations.\n")
 
     sims, symb_monitor = postSimsInit_DPmRegJoint(monitor, n_keep, model.state)
-    start_accpt = copy(model.state.accpt)
-    start_iter = copy(model.state.iter)
-    prev_accpt = copy(model.state.accpt) # set every report_freq iterations
+    start_accpt = deepcopy(model.state.accpt)
+    start_iter = deepcopy(model.state.iter)
+    prev_accpt = deepcopy(model.state.accpt) # set every report_freq iterations
 
     yX = hcat(model.y, model.X) # useful for allocation update
     if model.K > 1
@@ -83,7 +83,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
                 write(report_file, "Iter $(model.state.iter) at $(Dates.now())\n")
                 write(report_file, "Log-likelihood $(model.state.llik)\n")
                 write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n\n")
-                prev_accpt = copy(model.state.accpt)
+                prev_accpt = deepcopy(model.state.accpt)
             end
         end
 

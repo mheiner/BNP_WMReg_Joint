@@ -202,7 +202,7 @@ mutable struct Model_DPmRegJoint
 
     Model_DPmRegJoint(y, X, n, K, H, prior,
         indx_ηy, indx_ηx, indx_β_x, state) = new(deepcopy(y), deepcopy(X), copy(n),
-        copy(K), copy(H), deepcopy(prior),
+        deepcopy(K), deepcopy(H), deepcopy(prior),
         deepcopy(indx_ηy), deepcopy(indx_ηx), deepcopy(indx_β_x), deepcopy(state))
 end
 
@@ -231,7 +231,7 @@ function Model_DPmRegJoint(y::Array{Float64, 1}, X::Array{Float64, 2},
         indx_β_x = nothing
     end
 
-    return Model_DPmRegJoint(deepcopy(y), deepcopy(X), n, K, copy(H), deepcopy(prior),
+    return Model_DPmRegJoint(deepcopy(y), deepcopy(X), n, K, deepcopy(H), deepcopy(prior),
         indx_ηy, indx_ηx, indx_β_x, deepcopy(state))
 end
 
@@ -363,7 +363,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
             γ = trues(H, K)
         end
 
-        γδc = 1.0e6
+        γδc = fill(1.0e6, K)
         π_γ = fill(0.5, K)
 
         δ_x = vcat([ deepcopy(s0_δx) for h = 1:H ]'...)
