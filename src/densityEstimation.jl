@@ -3,22 +3,32 @@
 
 export ldensweight_mat, getEy, getlogdens_EY;
 
-function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict}) where T <: Real
+function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
+    γδc::Array{T, 1}=fill(1.0e6, size(sims[1][:β_y])[2])) where T <: Real
 
     nsim = length(sims)
     H, K = size(sims[1][:β_y])
     npred, Kx = size(X_pred)
 
     K == Kx || throw(error("X_pred dimensions not aligned with simuations."))
+    useγ = haskey(sims[1], :γ)
 
     out = Array{T,3}(undef, nsim, npred, H)
 
     if K > 1
         for ii = 1:nsim
 
+            if useγ
+                βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x], sims[ii][:δ_x],
+                                           sims[ii][:γ], γδc)
+            else
+                βγ_x = deepcopy(sims[ii][:β_x])
+                δγ_x = deepcopy(sims[ii][:δ_x])
+            end
+
             lNX = lNXmat(X_pred, sims[ii][:μ_x],
-                [sims[ii][:β_x][k] for k = 1:(K-1)],
-                sims[ii][:δ_x]) # npred by H
+                [ βγ_x[k] for k = 1:(K-1) ],
+                δγ_x) # npred by H
 
             lωNX_mat = broadcast(+, sims[ii][:lω], lNX') # H by npred
             lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 1) ) # npred vec
@@ -28,7 +38,13 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict}) where T <: Real
     else
         for ii = 1:nsim
 
-            lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(sims[ii][:δ_x])) # npred by H
+            if useγ
+                δγ_x = δ_x_modify_γ(sims[ii][:δ_x], sims[ii][:γ], γδc)
+            else
+                δγ_x = deepcopy(sims[ii][:δ_x])
+            end
+
+            lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(δγ_x)) # npred by H
 
             lωNX_mat = broadcast(+, sims[ii][:lω], lNX') # H by npred
             lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 1) ) # npred vec
@@ -52,7 +68,7 @@ end
 # h = 6
 # plot([scatter(x=X_pred[:,1], y=mean_dw[1,:,h], mode="scatter")])
 
-function getEy(X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Array{Dict}) where T <: Real
+function getEy(X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Array{Dict{Symbol,Any},1}) where T <: Real
     nsim, npred, H = size(dw_mat)
     nsim2 = length(sims)
     H2, K = size(sims[1][:β_y])
@@ -63,12 +79,19 @@ function getEy(X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Array{Dict}) where 
     npred == npred3 || throw(error("Dimension mismatch."))
     K == K3 || throw(error("Dimension mismatch."))
 
+    useγ = haskey(sims[1], :γ)
+
     out = zeros(T, nsim, npred)
 
     for ii = 1:nsim
+        if useγ
+            βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+        else
+            βγ_y = deepcopy(sims[ii][:β_y])
+        end
         for j = 1:npred
             for h = 1:H
-                Ey_h = sims[ii][:μ_y][h] - sum( sims[ii][:β_y][h,:] .* (X_pred[j,:] - sims[ii][:μ_x][h,:]) )
+                Ey_h = sims[ii][:μ_y][h] - sum( βγ_y[h,:] .* (X_pred[j,:] - sims[ii][:μ_x][h,:]) )
                 out[ii,j] += dw_mat[ii, j, h] * Ey_h
             end
         end
@@ -102,7 +125,7 @@ end
 
 
 function getlogdens_EY(X_pred::Array{T,2}, y_grid::Array{T,1},
-    ldw_mat::Array{T,3}, sims::Array{Dict}) where T <: Real
+    ldw_mat::Array{T,3}, sims::Array{Dict{Symbol,Any},1}) where T <: Real
 
     ngrid = length(y_grid)
     nsim, npred, H = size(ldw_mat)
@@ -115,13 +138,20 @@ function getlogdens_EY(X_pred::Array{T,2}, y_grid::Array{T,1},
     npred == npred3 || throw(error("Dimension mismatch."))
     K == K3 || throw(error("Dimension mismatch."))
 
+    useγ = haskey(sims[1], :γ)
+
     ldens0 = Array{T,4}(undef, (nsim, npred, ngrid, H))
     Ey = zeros(T, nsim, npred)
 
     for ii = 1:nsim
+        if useγ
+            βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+        else
+            βγ_y = deepcopy(sims[ii][:β_y])
+        end
         for j = 1:npred
             for h = 1:H
-                Ey_h = sims[ii][:μ_y][h] - sum( sims[ii][:β_y][h,:] .* (X_pred[j,:] - sims[ii][:μ_x][h,:]) )
+                Ey_h = sims[ii][:μ_y][h] - sum( βγ_y[h,:] .* (X_pred[j,:] - sims[ii][:μ_x][h,:]) )
                 Ey[ii,j] += exp(ldw_mat[ii, j, h]) * Ey_h
                 for jj = 1:ngrid
                     ldens0[ii,j,jj,h] = ldw_mat[ii, j, h] + logpdf(Normal(Ey_h, sqrt(sims[ii][:δ_y][h])), y_grid[jj])
