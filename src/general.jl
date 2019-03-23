@@ -18,7 +18,7 @@ mutable struct State_DPmRegJoint
     δ_x::Array{Float64,2}   # H by K matrix
 
     # variable selection
-    γ::Union{BitArray{1}, BitArray{1}} # K vector (for global, H by K matrix for local)
+    γ::Union{BitArray{1}, BitArray{2}} # K vector (for global, H by K matrix for local, which is not implemented yet)
     γδc::Array{Float64, 1} # scale factors for δ_x
     π_γ::Array{Float64, 1} # K vector of probabilities that γ_k = 1 (true in code)
 
@@ -67,12 +67,14 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     iter, accpt, cSig_ηlδx,
     adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, llik)
 
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x,
-        γ, γδc, π_γ,
-        S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
-        β0_βx, Λ0_βx, ν_δx, s0_δx,
-        iter, accpt, cSig_ηlδx,
-        adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, length(unique(S)), llik)
+    State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(S), deepcopy(lω), lω_to_v(lω), α, deepcopy(β0star_ηy),
+        deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
+        deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
+        iter, accpt, deepcopy(cSig_ηlδx),
+        adapt, adapt_iter, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
+        deepcopy(lNX), deepcopy(lωNX_vec), length(unique(S)), llik)
 end
 
 ## for starting new
@@ -81,10 +83,12 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     cSig_ηlδx, adapt)
 
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
-        S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
-        β0_βx, Λ0_βx, ν_δx, s0_δx,
-        0, zeros(Int, length(lω)), cSig_ηlδx,
+    State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(S), deepcopy(lω), lω_to_v(lω), α, deepcopy(β0star_ηy), deepcopy(Λ0star_ηy),
+        ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
+        deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
+        0, zeros(Int, length(lω)), deepcopy(cSig_ηlδx),
         adapt, 0,
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
@@ -99,10 +103,12 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx)
 
-    State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
-        S, lω, lω_to_v(lω), α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
-        β0_βx, Λ0_βx, ν_δx, s0_δx,
-        iter, accpt, cSig_ηlδx,
+    State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(S), deepcopy(lω), lω_to_v(lω), α, deepcopy(β0star_ηy),
+        deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
+        deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
+        iter, accpt, deepcopy(cSig_ηlδx),
         false, nothing, nothing, nothing,
         zeros(Float64, 1, 1), zeros(Float64, 1),
         length(unique(S)), 0.0)
@@ -150,13 +156,14 @@ function Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_
     β0_βx_mean, β0_βx_Cov, Λ0_βx_df, Λ0_βx_S0,
     s0_δx_df, s0_δx_s0)
 
-    Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov, inv(β0star_ηy_Cov),
-        Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
-        μ0_μx_mean, μ0_μx_Cov, inv(μ0_μx_Cov), Λ0_μx_df, Λ0_μx_S0,
-        β0_βx_mean, β0_βx_Cov,
+    Prior_DPmRegJoint(α_sh, α_rate, deepcopy(π_sh), deepcopy(β0star_ηy_mean),
+        deepcopy(β0star_ηy_Cov), inv(β0star_ηy_Cov),
+        deepcopy(Λ0star_ηy_df), deepcopy(Λ0star_ηy_S0), s0_δy_df, s0_δy_s0,
+        deepcopy(μ0_μx_mean), deepcopy(μ0_μx_Cov), inv(μ0_μx_Cov), Λ0_μx_df,
+        deepcopy(Λ0_μx_S0), deepcopy(β0_βx_mean), deepcopy(β0_βx_Cov),
         ( typeof(β0_βx_Cov) == Nothing ? nothing : [inv(β0_βx_Cov[k]) for k = 1:length(β0_βx_Cov)] ),
-        Λ0_βx_df, Λ0_βx_S0,
-        s0_δx_df, s0_δx_s0)
+        deepcopy(Λ0_βx_df), deepcopy(Λ0_βx_S0),
+        deepcopy(s0_δx_df), deepcopy(s0_δx_s0))
 end
 
 ## default prior spec
