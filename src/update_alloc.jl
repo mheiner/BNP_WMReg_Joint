@@ -74,7 +74,7 @@ function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
         βγ = ( nγ > 1 ? [βγ_y, βγ_x...] : [βγ_y] )
         δγ = hcat(δ_y, δγ_x)
 
-        yXγ = yX[:,vcat(1, (γindx + 1))]
+        yXγ = yX[:,vcat(1, (γindx .+ 1))]
 
         # the rest could be done in parallel
         lW = hcat([ lω[h] .+

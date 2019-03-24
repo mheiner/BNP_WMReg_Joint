@@ -469,7 +469,7 @@ function βδ_x_h_modify_γ(β_x::Array{Array{T, 1}, 1}, δ_x::Array{T, 1},
     nγ = length(γindx)
     nγ > 1 || throw("βδ_x_h_modify_γ requires more than one selected variable.")
 
-    βout = [ deepcopy(β_x[γindx[k]][(γindx[(k+1):nγ] .- k) ])  for k = 1:(nγ-1) ] # vector of H by (nγ-1):1 matrices
+    βout = [ deepcopy(β_x[γindx[k]][(γindx[(k+1):nγ] .- γindx[k]) ])  for k = 1:(nγ-1) ] # vector of H by (nγ-1):1 matrices
     δout = deepcopy(δ_x[γindx]) # H nows and sum(gamma) cols
 
     return βout, δout
