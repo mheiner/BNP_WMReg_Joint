@@ -19,6 +19,7 @@ function ldens_y(model::Model_DPmRegJoint, γ_cand::BitArray{1})
 end
 
 ## single component versions of these functions are found in update_eta_Met.jl
+## This is the version that inflates variances
 function βδ_x_modify_γ(β_x::Array{Array{T, 2}, 1}, δ_x::Array{T, 2},
                         γ::BitArray{1}, γδc::Array{T, 1}) where T <: Real
     modify_indx = findall(.!(γ))
@@ -52,6 +53,34 @@ function δ_x_modify_γ(δ_x::Array{T, 2},
     end
     return δout
 end
+
+
+## single component versions of these functions are found in update_eta_Met.jl
+## This is the version that subsets
+function βδ_x_modify_γ(β_x::Array{Array{T, 2}, 1}, δ_x::Array{T, 2},
+                        γ::BitArray{1}, γδc::Float64) where T <: Real
+
+    γδc == Inf || throw("A single variance inflation should be equal to Inf")
+
+    γindx = findall(γ)
+    nγ = length(γindx)
+    nγ > 1 || throw("βδ_x_modify_γ requires more than one selected variable.")
+
+    βout = [ deepcopy(β_x[γindx[k]][:, (γindx[(k+1):nγ] .- k) ])  for k = 1:(nγ-1) ] # vector of H by (nγ-1):1 matrices
+    δout = deepcopy(δ_x[:,γindx]) # H nows and sum(gamma) cols
+
+    return βout, δout
+end
+function δ_x_modify_γ(δ_x::Array{T, 2},
+                      γ::BitArray{1}, γδc::Float64) where T <: Real
+    γδc == Inf || throw("A single variance inflation should be equal to Inf")
+    γindx = findall(γ)
+    δout = deepcopy(δ_x[:,γindx]) # H nows and sum(gamma) cols
+    return δout
+end
+
+
+## Just subset this in the subset method
 function β_y_modify_γ(β_y::Array{T, 2}, γ::BitArray{1}) where T <: Real
     modify_indx = findall(.!(γ))
     βout = deepcopy(β_y)
@@ -67,25 +96,52 @@ function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) whe
 
     γ_alt = deepcopy(model.state.γ)
     γ_alt[k] = !γ_alt[k]
+    γindx_alt = findall( γ_alt )
+    nγ_alt = length( γindx_alt )
 
     lNy_alt = ldens_y(model, γ_alt)
 
-    if model.K > 1
-        βγ_x_alt, δγ_x_alt = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
-                                           γ_alt, model.state.γδc)
+    if model.state.γδc == Inf # subsetting method
 
-        lNX_alt = lNXmat(model.X, model.state.μ_x, βγ_x_alt, δγ_x_alt) # n by H matrix
-    else
-        δγ_x_alt = δ_x_modify_γ(model.state.δ_x, γ_alt, model.state.γδc)
+        if nγ_alt > 1
+            βγ_x_alt, δγ_x_alt = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
+                                               γ_alt, model.state.γδc)
 
-        lNX_alt = lNXmat(model.X, model.state.μ_x, δγ_x_alt) # n by H matrix
+            lNX_alt = lNXmat(model.X[:,γindx_alt], model.state.μ_x[:,γindx_alt],
+                             βγ_x_alt, δγ_x_alt) # n by H matrix
+        elseif nγ_alt == 1
+            δγ_x_alt = δ_x_modify_γ(model.state.δ_x, γ_alt, model.state.γδc)
+
+            lNX_alt = lNXmat(model.X[:,γindx_alt],
+                             model.state.μ_x[:,γindx_alt], δγ_x_alt) # n by H matrix
+        elseif nγ_alt == 0
+            lNX_alt = zeros(Float64, model.n, model.H)
+        end
+
+    else # variance inflation method
+
+        if model.K > 1
+            βγ_x_alt, δγ_x_alt = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
+                                               γ_alt, model.state.γδc)
+
+            lNX_alt = lNXmat(model.X, model.state.μ_x, βγ_x_alt, δγ_x_alt) # n by H matrix
+        else
+            δγ_x_alt = δ_x_modify_γ(model.state.δ_x, γ_alt, model.state.γδc)
+
+            lNX_alt = lNXmat(model.X, model.state.μ_x, δγ_x_alt) # n by H matrix
+        end
+
     end
+
 
     lNx_alt = [ deepcopy(lNX_alt[i, model.state.S[i]]) for i = 1:model.n ]
     lNx_old = [ deepcopy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
 
-    lωNX_vec_alt = lωNXvec(model.state.lω, lNX_alt)
-
+    if nγ_alt == 0 && model.state.γδc == Inf
+        lωNX_vec_alt = zeros(Float64, model.n)
+    else
+        lωNX_vec_alt = lωNXvec(model.state.lω, lNX_alt)
+    end
 
     la = log(model.state.π_γ[k])
     lb = log(1.0 - model.state.π_γ[k])

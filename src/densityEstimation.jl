@@ -4,7 +4,9 @@
 export ldensweight_mat, getEy, getlogdens_EY;
 
 function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
-    γδc::Array{T, 1}=fill(1.0e6, size(sims[1][:β_y])[2])) where T <: Real
+    γδc::Union{Float64, Array{T, 1}}=Inf) where T <: Real
+
+    # fill(1.0e6, size(sims[1][:β_y])[2]) # default γδc under variance inflation method
 
     nsim = length(sims)
     H, K = size(sims[1][:β_y])
@@ -19,32 +21,70 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
         for ii = 1:nsim
 
             if useγ
-                βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x], sims[ii][:δ_x],
-                                           sims[ii][:γ], γδc)
-            else
-                βγ_x = deepcopy(sims[ii][:β_x])
-                δγ_x = deepcopy(sims[ii][:δ_x])
-            end
+                if γδc == Inf  # subset method
+                    γindx = findall(sims[ii][:γ])
+                    nγ = length( γindx )
 
-            lNX = lNXmat(X_pred, sims[ii][:μ_x],
-                [ βγ_x[k] for k = 1:(K-1) ],
-                δγ_x) # npred by H
+                    if nγ == 0
+                        lNX = zeros(Float64, npred, H)
+                    elseif nγ == 1
+                        δγ_x = δ_x_modify_γ(sims[ii][:δ_x], sims[ii][:γ], γδc)
+                        lNX = lNXmat(X_pred[:,γindx],
+                                         sims[ii][:μ_x][:,γindx], δγ_x) # npred by H matrix
+                    elseif nγ > 1
+                        βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
+                                        sims[ii][:δ_x],sims[ii][:γ], γδc)
+
+                        lNX_alt = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
+                                         βγ_x, δγ_x) # npred by H matrix
+                    end
+
+                else  # variance-inflation method
+                    βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
+                                    sims[ii][:δ_x], sims[ii][:γ], γδc)
+
+                    lNX = lNXmat(X_pred, sims[ii][:μ_x],
+                             [ βγ_x[k] for k = 1:(K-1) ],
+                             δγ_x) # npred by H
+                end
+
+            else
+                β_x = deepcopy(sims[ii][:β_x])
+                δ_x = deepcopy(sims[ii][:δ_x])
+
+                lNX = lNXmat(X_pred, sims[ii][:μ_x],
+                    [ β_x[k] for k = 1:(K-1) ],
+                    δ_x) # npred by H
+            end
 
             lωNX_mat = broadcast(+, sims[ii][:lω], lNX') # H by npred
             lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 1) ) # npred vec
 
             out[ii,:,:] = broadcast(-, lωNX_mat', lωNX_vec) # normalized, npred by H
         end
-    else
+    else  # K = 1
         for ii = 1:nsim
 
             if useγ
-                δγ_x = δ_x_modify_γ(sims[ii][:δ_x], sims[ii][:γ], γδc)
-            else
-                δγ_x = deepcopy(sims[ii][:δ_x])
-            end
 
-            lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(δγ_x)) # npred by H
+                    if γδc == Inf  # subset method
+
+                        if sims[ii][:γ][1]
+                            lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(sims[ii][:δ_x])) # npred by H matrix
+                        else
+                            lNX = zeros(Float64, npred, H)
+                        end
+
+                    else  # variance-inflation method
+
+                        δγ_x = δ_x_modify_γ(sims[ii][:δ_x], sims[ii][:γ], γδc)
+                        lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(δγ_x))
+
+                    end
+
+            else
+                lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(sims[ii][:δ_x])) # npred by H
+            end
 
             lωNX_mat = broadcast(+, sims[ii][:lω], lNX') # H by npred
             lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 1) ) # npred vec

@@ -116,12 +116,17 @@ function update_vlω_mvSlice!(model::Model_DPmRegJoint) where T <: Real
     a_v = 1.0 .+ M[1:(model.H-1)]
     b_v = reverse( model.state.α .+ cumsum( reverse( M[2:model.H] ) ) )
 
-    v_new, lωNX_vec_new = mvSlice_v(model.state.v, a_v, b_v, model.state.lNX)
+    if model.state.γδc == Inf && sum(model.state.γ) == 0
+        v_new = [ rand( Beta(a_v[h], b_v[h]) ) for h = 1:(model.H-1) ]
+    else
+        v_new, lωNX_vec_new = mvSlice_v(model.state.v, a_v, b_v, model.state.lNX)
+        model.state.lωNX_vec = lωNX_vec_new
+    end
+
     lω_new = v_to_lω(v_new)
 
     model.state.v = v_new
     model.state.lω = lω_new
-    model.state.lωNX_vec = lωNX_vec_new
 
     return nothing
 end

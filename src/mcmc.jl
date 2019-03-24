@@ -22,20 +22,41 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     prev_accpt = deepcopy(model.state.accpt) # set every report_freq iterations
 
     yX = hcat(model.y, model.X) # useful for allocation update
-    if model.K > 1
-        model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
-    else
-        model.state.lNX = lNXmat(vec(model.X), vec(model.state.μ_x), vec(model.state.δ_x))
+
+    if model.state.γδc == Inf # subset method for variable selection
+        γindx_start = findall(model.state.γ)
+        nγ_start = length(γindx_start)
+
+        if nγ_start == 0
+            model.state.lNX = zeros(Float64, model.n, model.H)
+            model.state.lωNX_vec = zeros(Float64, model.n)
+        elseif nγ_start == 1
+            model.state.lNX = lNXmat(model.X[:,γindx_start],
+                    model.state.μ_x[:,γindx_start], model.state.δ_x[:,γindx_start])
+            model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
+        elseif nγ_start > 1
+            βγ_x_start, δγ_x_start = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
+                                               model.state.γ, model.state.γδc)
+            model.state.lNX = lNXmat(model.X[:,γindx_start],
+                model.state.μ_x[:,γindx_start], βγ_x_start, δγ_x_start) # n by H matrix
+            model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
+        end
+    else # variance-inflation method for variable selection
+        if model.K > 1
+            model.state.lNX = lNXmat(model.X, model.state.μ_x, model.state.β_x, model.state.δ_x)
+        else
+            model.state.lNX = lNXmat(vec(model.X), vec(model.state.μ_x), vec(model.state.δ_x))
+        end
+        model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
     end
 
-    model.state.lωNX_vec = lωNXvec(model.state.lω, model.state.lNX)
 
     ## sampling
     for i in 1:n_keep
         for j in 1:thin
 
             if updatevars.η
-                Λβ0star_ηy = model.state.Λ0star_ηy*model.state.β0star_ηy
+                Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
                 βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
 
                 if model.K > 1
