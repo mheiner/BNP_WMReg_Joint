@@ -38,7 +38,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
             lNX_mat_cand[:,h] = zeros(Float64, model.n)
             lωNX_vec_cand = zeros(Float64, model.n) # n vector
         elseif nγ == 1
-            lNX_mat_cand[:,h] = logpdf.( Normal(μ_x_h_cand[γindx], sqrt(δ_x_h_cand[γindx])), vec(model.X[:,γindx]) )
+            lNX_mat_cand[:,h] = logpdf.( Normal(μ_x_h_cand[γindx[1]], sqrt(δ_x_h_cand[γindx[1]])), vec(model.X[:,γindx]) )
             lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
         elseif nγ > 1
             βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
