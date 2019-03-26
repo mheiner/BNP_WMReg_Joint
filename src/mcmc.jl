@@ -109,6 +109,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
         end
 
         sims[i] = BayesInference.deepcopyFields(model.state, symb_monitor)
+        sims[i][:Scounts] = counts(model.state.S, 1:model.H)
 
     end
 
