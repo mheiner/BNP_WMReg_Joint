@@ -33,7 +33,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     γindx = findall(model.state.γ)
     nγ = length(γindx)
 
-    if model.state.γδc == Inf
+    if model.state.γδc == Inf # subset method
         if nγ == 0
             lNX_mat_cand[:,h] = zeros(Float64, model.n)
             lωNX_vec_cand = zeros(Float64, model.n) # n vector
@@ -47,6 +47,19 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
             lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X[:,γindx]'),
                 μ_x_h_cand[γindx], βγ_x_h_cand, δγ_x_h_cand )
             lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+        end
+    elseif model.state.γδc == nothing # integration method
+        if nγ == 0
+            lNX_mat_cand[:,h] = zeros(Float64, model.n)
+            lωNX_vec_cand = zeros(Float64, model.n) # n vector
+        elseif nγ == 1
+            σ2x = sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand ).mat[γindx, γindx][1]
+            lNX_mat_cand[:,h] = logpdf.( Normal(μ_x_h_cand[γindx[1]], sqrt(σ2x)), vec(model.X[:,γindx]) )
+            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+        elseif nγ > 1
+            Σx = PDMat( sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand ).mat[γindx, γindx] )
+            lNX_mat_cand[:,h] = logpdf( MultivariateNormal(μ_x_h_cand[γindx], Σx), Matrix(model.X[:,γindx]') )
+            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand)
         end
     else # variance-inflation method
         βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
@@ -199,7 +212,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
     lNX_mat_cand = deepcopy(model.state.lNX)
 
     ## bookkeeping for variable selection
-    if model.state.γδc == Inf
+    if model.state.γδc == Inf || model.state.γδc == nothing # subset or integration method
         if model.state.γ[1]
             lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
             lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector

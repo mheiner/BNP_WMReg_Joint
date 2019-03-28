@@ -7,7 +7,7 @@ function llik_numerator(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_x::Array{T, 2},
     β_x::Union{Array{Array{Float64, 2}, 1}, Nothing},
     δ_x::Array{Float64,2},
-    γ::BitArray{1}, γδc::Union{Float64, Array{T, 1}},
+    γ::BitArray{1}, γδc::Union{Float64, Array{T, 1}, Nothing},
     lω::Array{T, 1}) where T <: Real
 
     yX = hcat(y, X)
@@ -51,7 +51,7 @@ function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
     lω::Array{T, 1}) where T <: Real
 
     γδc == Inf || throw("Subset method for variable selection requires γδc = Inf.")
-    size(yX)[2] == (K+1) || throw("llik_numerator assumes a full X matrix.")
+    size(yX,2) == (K+1) || throw("llik_numerator assumes a full X matrix.")
 
     γindx = findall(γ)
     nγ = length(γindx)
@@ -80,6 +80,40 @@ function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
         lW = hcat([ lω[h] .+
             lNX_sqfChol( Matrix(yXγ'), μγ[h,:], [ βγ[k][h,:] for k = 1:nγ ], δγ[h,:] )
                 for h = 1:H ]...) # lW is a n by H matrix
+        end
+
+    return lW # lW is a n by H matrix
+end
+function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
+    μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
+    μ_x::Array{T, 2},
+    β_x::Union{Array{Array{Float64, 2}, 1}, Nothing},
+    δ_x::Array{Float64,2},
+    γ::BitArray{1}, γδc::Nothing, # γδc == nothing (integration method)
+    lω::Array{T, 1}) where T <: Real
+
+    size(yX,2) == (K+1) || throw("llik_numerator assumes a full X matrix.")
+
+    γindx = findall(γ)
+    γindx_withy = vcat(1, γindx .+ 1)
+    nγ = length(γindx)
+
+    if nγ == 0
+
+        lW = hcat( [ lω[h] .+ logpdf.( Normal(μ_y[h], sqrt(δ_y[h])), yX[:,1] )  for h = 1:H ]... )
+
+    elseif nγ > 0
+
+        βγ_y = β_y_modify_γ(β_y, γ) # H by K matrix
+
+        μ = hcat(μ_y, μ_x)
+        β = ( K > 1 ? [βγ_y, β_x...] : [βγ_y] )
+        δ = hcat(δ_y, δ_x)
+
+        # the rest could be done in parallel
+        Σxs = [ PDMat( sqfChol_to_Σ( [ β[k][h,:] for k = 1:K ], δ[h,:] ).mat[γindx_withy, γindx_withy] ) for h = 1:H ]
+        lW = hcat( [ lω[h] .+ logpdf(MultivariateNormal(μ[h,γindx_withy], Σxs[h]), Matrix(yX[:,γindx_withy]')) for h = 1:H ]... ) # n by H matrix
+
         end
 
     return lW # lW is a n by H matrix

@@ -1,7 +1,7 @@
 name = "DPmRegJoint"
 uuid = "dd2e0ace-cd18-11e8-09d7-894d176eb2bf"
 authors = ["Matt Heiner <mheiner@gmail.com>"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 BayesInference = "674fc506-cd11-11e8-249e-83dc12bc047a"

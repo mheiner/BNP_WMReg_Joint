@@ -1,6 +1,6 @@
 # update_variable_selection.jl
 
-export βδ_x_modify_γ, δ_x_modify_γ;
+export βδ_x_modify_γ, δ_x_modify_γ, lNXmat_lωNXvec;
 
 function ldens_y(model::Model_DPmRegJoint, γ_cand::BitArray{1})
 
@@ -92,56 +92,72 @@ function β_y_modify_γ(β_y::Array{T, 2}, γ::BitArray{1}) where T <: Real
 end
 
 
+## Calculate lNX and lωNXvec under different variable selection methods
+function lNXmat_lωNXvec(model::Model_DPmRegJoint, γ::BitArray{1})
+
+    γindx = findall(γ)
+    nγ = length(γindx)
+
+    if model.state.γδc == Inf # subset method for variable selection
+
+        if nγ == 0
+            lNX = zeros(Float64, model.n, model.H)
+            lωNX_vec = zeros(Float64, model.n)
+        elseif nγ == 1
+            lNX = lNXmat(model.X[:,γindx],
+                         model.state.μ_x[:,γindx], model.state.δ_x[:,γindx])
+            lωNX_vec = lωNXvec(model.state.lω, lNX)
+        elseif nγ > 1
+            βγ_x, δγ_x = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
+                                       γ, model.state.γδc)
+            lNX = lNXmat(model.X[:,γindx],
+                         model.state.μ_x[:,γindx], βγ_x, δγ_x) # n by H matrix
+            lωNX_vec = lωNXvec(model.state.lω, lNX)
+        end
+
+    elseif model.state.γδc == nothing # integration method for variable selection
+
+        if nγ == 0
+            lNX = zeros(Float64, model.n, model.H)
+            lωNX_vec = zeros(Float64, model.n)
+        elseif nγ == 1
+            σ2xs = [ sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ], model.state.δ_x[h,:] ).mat[γindx, γindx][1] for h = 1:model.H ]
+            lNX = lNXmat(model.X[:,γindx], model.state.μ_x[:,γindx], σ2xs)
+            lωNX_vec = lωNXvec(model.state.lω, lNX)
+        elseif nγ > 1
+            Σxs = [ PDMat( sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ], model.state.δ_x[h,:] ).mat[γindx, γindx] ) for h = 1:model.H ]
+            lNX = hcat( [ logpdf(MultivariateNormal(model.state.μ_x[h,γindx], Σxs[h]), Matrix(model.X[:,γindx]')) for h = 1:model.H ]... ) # n by H matrix
+            lωNX_vec = lωNXvec(model.state.lω, lNX)
+        end
+
+    else # variance-inflation method for variable selection
+
+        if model.K > 1
+            βγ_x, δγ_x = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
+                                       γ, model.state.γδc)
+            lNX = lNXmat(model.X, model.state.μ_x, βγ_x, δγ_x)
+        else
+            δγ_x = δ_x_modify_γ(model.state.δ_x, γ, model.state.γδc)
+            lNX = lNXmat(vec(model.X), vec(model.state.μ_x), vec(δγ_x))
+        end
+        lωNX_vec = lωNXvec(model.state.lω, lNX)
+    end
+
+    return lNX, lωNX_vec
+end
+
+
+
 function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) where T <: Real
 
     γ_alt = deepcopy(model.state.γ)
     γ_alt[k] = !γ_alt[k]
-    γindx_alt = findall( γ_alt )
-    nγ_alt = length( γindx_alt )
 
     lNy_alt = ldens_y(model, γ_alt)
-
-    if model.state.γδc == Inf # subsetting method
-
-        if nγ_alt > 1
-            βγ_x_alt, δγ_x_alt = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
-                                               γ_alt, model.state.γδc)
-
-            lNX_alt = lNXmat(model.X[:,γindx_alt], model.state.μ_x[:,γindx_alt],
-                             βγ_x_alt, δγ_x_alt) # n by H matrix
-        elseif nγ_alt == 1
-            δγ_x_alt = δ_x_modify_γ(model.state.δ_x, γ_alt, model.state.γδc)
-
-            lNX_alt = lNXmat(model.X[:,γindx_alt],
-                             model.state.μ_x[:,γindx_alt], δγ_x_alt) # n by H matrix
-        elseif nγ_alt == 0
-            lNX_alt = zeros(Float64, model.n, model.H)
-        end
-
-    else # variance inflation method
-
-        if model.K > 1
-            βγ_x_alt, δγ_x_alt = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
-                                               γ_alt, model.state.γδc)
-
-            lNX_alt = lNXmat(model.X, model.state.μ_x, βγ_x_alt, δγ_x_alt) # n by H matrix
-        else
-            δγ_x_alt = δ_x_modify_γ(model.state.δ_x, γ_alt, model.state.γδc)
-
-            lNX_alt = lNXmat(model.X, model.state.μ_x, δγ_x_alt) # n by H matrix
-        end
-
-    end
-
+    lNX_alt, lωNX_vec_alt = lNXmat_lωNXvec(model, γ_alt)
 
     lNx_alt = [ deepcopy(lNX_alt[i, model.state.S[i]]) for i = 1:model.n ]
     lNx_old = [ deepcopy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
-
-    if nγ_alt == 0 && model.state.γδc == Inf
-        lωNX_vec_alt = zeros(Float64, model.n)
-    else
-        lωNX_vec_alt = lωNXvec(model.state.lω, lNX_alt)
-    end
 
     la = log(model.state.π_γ[k])
     lb = log(1.0 - model.state.π_γ[k])

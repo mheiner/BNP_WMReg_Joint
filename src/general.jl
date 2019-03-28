@@ -19,7 +19,7 @@ mutable struct State_DPmRegJoint
 
     # variable selection
     γ::Union{BitArray{1}, BitArray{2}} # K vector (for global, H by K matrix for local, which is not implemented yet)
-    γδc::Union{Float64, Array{Float64, 1}} # scale factors for δ_x
+    γδc::Union{Float64, Array{Float64, 1}, Nothing} # scale factors for δ_x
     π_γ::Array{Float64, 1} # K vector of probabilities that γ_k = 1 (true in code)
 
     # allocation states, weights
@@ -340,6 +340,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
 
         γδc = Inf
         # γδc = fill(1.0e6, K)
+        # γδc = nothing
         π_γ = fill(0.5, K)
 
         δ_x = [ rand(InverseGamma(ν_δx[k]/2.0, ν_δx[k]*s0_δx[k]/2.0)) for h=1:H, k=1:K ]
@@ -373,6 +374,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
 
         γδc = Inf
         # γδc = fill(1.0e6, K)
+        # γδc = nothing
         π_γ = fill(0.5, K)
 
         δ_x = vcat([ deepcopy(s0_δx) for h = 1:H ]'...)

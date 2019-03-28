@@ -17,6 +17,8 @@ end
 function lNX_sqfChol(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
     β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
 
+    size(X,1) == length(μ) || throw("In lNX_sqfChol, the columns of X are the observations.")
+
     Σ = sqfChol_to_Σ(β, δ)
     d = MultivariateNormal(μ, Σ)
 

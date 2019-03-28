@@ -39,6 +39,26 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
                                          βγ_x, δγ_x) # npred by H matrix
                     end
 
+                elseif γδc == nothing  # integration method
+                    γindx = findall(sims[ii][:γ])
+                    nγ = length( γindx )
+
+                    if nγ == 0
+                        lNX = zeros(Float64, npred, H)
+                    elseif nγ == 1
+                        σ2xs = [ sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx][1] for h = 1:H ]
+                        lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
+                    elseif nγ > 1
+                        βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
+                                        sims[ii][:δ_x],sims[ii][:γ], γδc)
+
+                        lNX_alt = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
+                                         βγ_x, δγ_x) # npred by H matrix
+
+                        Σxs = [ PDMat( sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx] ) for h = 1:H ]
+                        lNX = hcat( [ logpdf(MultivariateNormal(sims[ii][:μ_x][h,γindx], Σxs[h]), Matrix(X_pred[:,γindx]')) for h = 1:H ]... ) # n by H matrix
+                    end
+
                 else  # variance-inflation method
                     βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
                                     sims[ii][:δ_x], sims[ii][:γ], γδc)
@@ -67,7 +87,7 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
 
             if useγ
 
-                    if γδc == Inf  # subset method
+                    if γδc == Inf || γδc == nothing # subset or integration method
 
                         if sims[ii][:γ][1]
                             lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(sims[ii][:δ_x])) # npred by H matrix
