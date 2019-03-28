@@ -12,5 +12,6 @@ SpecialFunctions
 Distributions
 PDMats
 StatsBase
+Roots
 
 BayesInference

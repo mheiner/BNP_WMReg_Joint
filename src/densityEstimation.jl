@@ -1,10 +1,10 @@
 # using Distributions
 # using BayesInference
 
-export ldensweight_mat, getEy, getlogdens_EY;
+export ldensweight_mat, getEy, qnorm_mix, getQuant, getlogdens_EY;
 
 function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
-    γδc::Union{Float64, Array{T, 1}}=Inf) where T <: Real
+    γδc::Union{Float64, Array{T, 1}, Nothing}=Inf) where T <: Real
 
     # fill(1.0e6, size(sims[1][:β_y])[2]) # default γδc under variance inflation method
 
@@ -35,7 +35,7 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
                         βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
                                         sims[ii][:δ_x],sims[ii][:γ], γδc)
 
-                        lNX_alt = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
+                        lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
                                          βγ_x, δγ_x) # npred by H matrix
                     end
 
@@ -49,12 +49,6 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
                         σ2xs = [ sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx][1] for h = 1:H ]
                         lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
                     elseif nγ > 1
-                        βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
-                                        sims[ii][:δ_x],sims[ii][:γ], γδc)
-
-                        lNX_alt = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
-                                         βγ_x, δγ_x) # npred by H matrix
-
                         Σxs = [ PDMat( sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx] ) for h = 1:H ]
                         lNX = hcat( [ logpdf(MultivariateNormal(sims[ii][:μ_x][h,γindx], Σxs[h]), Matrix(X_pred[:,γindx]')) for h = 1:H ]... ) # n by H matrix
                     end
@@ -153,6 +147,86 @@ function getEy(X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Array{Dict{Symbol,A
             for h = 1:H
                 Ey_h = sims[ii][:μ_y][h] - sum( βγ_y[h,:] .* (X_pred[j,:] - sims[ii][:μ_x][h,:]) )
                 out[ii,j] += dw_mat[ii, j, h] * Ey_h
+            end
+        end
+    end
+
+    out
+end
+
+function qnorm_mix(q::Float64, μ::Vector{Float64}, σ::Vector{Float64}, w::Vector{Float64})
+    all(w .>= 0.0) || throw(error("Weights must be non-negative"))
+    q > 0.0 && q < 1.0 || throw(error("Quantile must be between 0 and 1."))
+
+    sum(w) ≈ 1.0 ? nothing : w = w ./ sum(w)
+
+    d = Distributions.Normal()
+
+    if q >= 0.5
+        z_max = Distributions.quantile(d, q)
+        z_min = -z_max
+
+        x_max = maximum( σ .* z_max .+ μ )
+        x_min = minimum( σ .* z_min .+ μ )
+    else
+        z_min = Distributions.quantile(d, q)
+        z_max = -z_min
+
+        x_max = maximum( σ .* z_max .+ μ )
+        x_min = minimum( σ .* z_min .+ μ )
+    end
+
+    if abs(q - w'cdf.(d, ( x_max .- μ ) ./ σ)) < 1.0e-4
+        out = x_max
+    elseif abs(q - w'cdf.(d, ( x_min .- μ ) ./ σ)) < 1.0e-4
+        out = x_min
+    elseif x_max > x_min
+        f(x) = ( q - w'cdf.(d, ( x .- μ ) ./ σ) )
+        out = Roots.find_zero(f, (x_min, x_max))
+    end
+
+    return out
+end
+
+
+function getQuant(q::Float64, X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Array{Dict{Symbol,Any},1}) where T <: Real
+    nsim, npred, H = size(dw_mat)
+    nsim2 = length(sims)
+    H2, K = size(sims[1][:β_y])
+    npred3, K3 = size(X_pred)
+
+    q > 0.0 && q < 1.0 || throw(error("Quantile must be between 0 and 1."))
+    nsim == nsim2 || throw(error("Dimension mismatch."))
+    H == H2 || throw(error("Dimension mismatch."))
+    npred == npred3 || throw(error("Dimension mismatch."))
+    K == K3 || throw(error("Dimension mismatch."))
+
+    useγ = haskey(sims[1], :γ)
+
+    out = zeros(T, nsim, npred)
+
+    for ii = 1:nsim
+        if useγ
+            βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+        else
+            βγ_y = deepcopy(sims[ii][:β_y])
+        end
+
+        σ = sqrt.(sims[ii][:δ_y])
+
+        for j = 1:npred
+
+            μ = [ sims[ii][:μ_y][h] - sum( βγ_y[h,:] .* (X_pred[j,:] - sims[ii][:μ_x][h,:]) ) for h = 1:H ]
+            w = deepcopy(dw_mat[ii, j, :])
+
+            try
+                out[ii,j] = qnorm_mix(q, μ, σ, w)
+            catch
+                println("No root found, simid $(ii) Xpred indx $(j)")
+                println("μ=$(μ)")
+                println("σ=$(σ)")
+                println("w=$(w)")
+                qnorm_mix(q, μ, σ, w) # for debugging
             end
         end
     end

@@ -7,6 +7,7 @@ using SpecialFunctions
 using Distributions
 using PDMats
 using StatsBase
+using Roots
 
 using BayesInference # personal package
 
