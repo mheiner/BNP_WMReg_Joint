@@ -169,24 +169,24 @@ end
 ## default prior spec
 function Prior_DPmRegJoint(K::Int, H::Int)
 
-    Prior_DPmRegJoint(3.0, # α_sh
+    Prior_DPmRegJoint(5.0, # α_sh
     1.0, # α_rate
-    fill(0.5, K, 2), # π_sh
+    fill(0.25, K, 2), # π_sh
     zeros(K+1), # β0star_ηy_mean
-    PDMat(Matrix(Diagonal(vcat(9.0, fill(1.0, K))))), # β0star_ηy_Cov
-    5.0*(K+1+2), # Λ0star_ηy_df
-    PDMat(Matrix(Diagonal(fill(9.0, K+1)))), # Λ0star_ηy_S0
+    PDMat(Matrix(Diagonal(vcat(4.0, fill(1.0, K))))), # β0star_ηy_Cov
+    20.0*(K+1+2), # Λ0star_ηy_df
+    PDMat(Matrix(Diagonal(fill(100.0, K+1)))), # Λ0star_ηy_S0
     5.0, # s0_δy_df
     0.1, # s0_δy_s0
     zeros(K), # μ0_μx_mean
-    PDMat(Matrix(Diagonal(fill(9.0, K)))), # μ0_μx_Cov
+    PDMat(Matrix(Diagonal(fill(4.0, K)))), # μ0_μx_Cov
     5.0*(K+2), # Λ0_μx_df
     PDMat(Matrix(Diagonal(fill(9.0, K)))), # Λ0_μx_S0
     (K > 1 ? [zeros(k) for k = (K-1):-1:1] : nothing), # β0_βx_mean
-    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(9.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
-    (K > 1 ? fill(5.0*(K+2), K-1) : nothing), # Λ0_βx_df
-    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(9.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
-    fill(5.0, K), # s0_δx_df
+    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(1.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
+    (K > 1 ? fill(10.0*(K+2), K-1) : nothing), # Λ0_βx_df
+    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(2.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
+    fill(10.0, K), # s0_δx_df
     fill(1.0, K))
 
 end
