@@ -171,7 +171,7 @@ function Prior_DPmRegJoint(K::Int, H::Int)
 
     Prior_DPmRegJoint(5.0, # α_sh
     1.0, # α_rate
-    fill(0.25, K, 2), # π_sh
+    fill(0.5, K, 2), # π_sh
     zeros(K+1), # β0star_ηy_mean
     PDMat(Matrix(Diagonal(vcat(4.0, fill(1.0, K))))), # β0star_ηy_Cov
     20.0*(K+1+2), # Λ0star_ηy_df
@@ -319,7 +319,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
 
     if random
         s0_δx = [ rand(InverseGamma(prior.s0_δx_df[k]/2.0, prior.s0_δx_df[k]*prior.s0_δx_s0[k]/2.0)) for k = 1:K ]
-        ν_δx = fill(5.0, K)
+        ν_δx = fill(10.0, K)
         Λ0_βx = ( K > 1 ? [ PDMat(rand(Wishart(prior.Λ0_βx_df[k], inv(prior.Λ0_βx_S0[k])/prior.Λ0_βx_df[k]))) for k = 1:(K-1) ] : nothing)
         β0_βx = ( K > 1 ? [ rand(MvNormal(prior.β0_βx_mean[k], prior.β0_βx_Cov[k])) for k = 1:(K-1) ] : nothing)
         Λ0_μx = PDMat( rand( Wishart(prior.Λ0_μx_df, inv(prior.Λ0_μx_S0)/prior.Λ0_μx_df) ) )
@@ -338,10 +338,10 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
             γ = trues(H, K)
         end
 
-        γδc = Inf
+        # γδc = Inf
         # γδc = fill(1.0e6, K)
-        # γδc = nothing
-        π_γ = fill(0.5, K)
+        γδc = nothing
+        π_γ = fill(0.25, K)
 
         δ_x = [ rand(InverseGamma(ν_δx[k]/2.0, ν_δx[k]*s0_δx[k]/2.0)) for h=1:H, k=1:K ]
 
@@ -353,7 +353,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         μ_y = rand( Normal(β0star_ηy[1], sqrt(inv(Λ0star_ηy).mat[1,1])), H)
     else
         s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
-        ν_δx = fill(5.0, K)
+        ν_δx = fill(10.0, K)
         Λ0_βx = ( K > 1 ? [ inv(prior.Λ0_βx_S0[k]) for k = 1:(K-1) ] : nothing)
         β0_βx = ( K > 1 ? [ prior.β0_βx_mean[k] for k = 1:(K-1) ] : nothing)
         Λ0_μx = inv(prior.Λ0_μx_S0)
@@ -372,10 +372,10 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
             γ = trues(H, K)
         end
 
-        γδc = Inf
+        # γδc = Inf
         # γδc = fill(1.0e6, K)
-        # γδc = nothing
-        π_γ = fill(0.5, K)
+        γδc = nothing
+        π_γ = fill(0.25, K)
 
         δ_x = vcat([ deepcopy(s0_δx) for h = 1:H ]'...)
 
