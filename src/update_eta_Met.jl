@@ -117,7 +117,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
             X_h = model.X[indx_h,:]
             D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], model.state.γ)
 
-            Λ1star_ηy_h_old = PDMat(D_h_old'D_h_old + model.state.Λ0star_ηy)
+            Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
             β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
 
             a1_δy_old = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
@@ -127,7 +127,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
             ## Important quantities for candidate
             D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
 
-            Λ1star_ηy_h_cand = PDMat(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
+            Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
             β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
 
             a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
@@ -272,7 +272,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
             X_h = model.X[indx_h,:]
             D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], model.state.γ)
 
-            Λ1star_ηy_h_old = PDMat(D_h_old'D_h_old + model.state.Λ0star_ηy)
+            Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
             β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
 
             a1_δy_old = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
@@ -282,7 +282,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
             ## Important quantities for candidate
             D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
 
-            Λ1star_ηy_h_cand = PDMat(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
+            Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
             β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
 
             a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape

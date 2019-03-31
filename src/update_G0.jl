@@ -33,11 +33,11 @@ function rpost_Λ0star_ηy(βstar_ηy::Array{T,2}, δ_y::Array{T,1}, β0star_ηy
 
     ## Updated parameters
     df1 = df + nstar
-    invSc1 = PDMat(invSc + SS)
+    invSc1 = PDMat_adj(invSc + SS)
     Sc1 = inv(invSc1) # is there some way around this?
 
     ## Sample
-    return PDMat(rand(Distributions.Wishart(df1, Sc1)))
+    return PDMat_adj(rand(Distributions.Wishart(df1, Sc1)))
 end
 
 function rpost_IGs0_gammaPri(δ::Array{T,1}, ν::T, n0::T, s00::T) where T <: Real
@@ -71,7 +71,7 @@ function update_G0!(model::Model_DPmRegJoint)
                                 model.state.Λ0_μx,
                                 model.prior.μ0_μx_mean, model.prior.μ0_μx_Prec)
 
-    model.state.Λ0_μx = PDMat(BayesInference.rpost_MvNprec_knownMean(model.state.μ_x[ii,:],
+    model.state.Λ0_μx = PDMat_adj(BayesInference.rpost_MvNprec_knownMean(model.state.μ_x[ii,:],
                                 model.state.μ0_μx,
                                 model.prior.Λ0_μx_df, model.prior.Λ0_μx_df * model.prior.Λ0_μx_S0))
 
@@ -82,7 +82,7 @@ function update_G0!(model::Model_DPmRegJoint)
                 model.state.Λ0_βx[k],
                 model.prior.β0_βx_mean[k], model.prior.β0_βx_Prec[k])
 
-            model.state.Λ0_βx[k] = PDMat(BayesInference.rpost_MvNprec_knownMean(
+            model.state.Λ0_βx[k] = PDMat_adj(BayesInference.rpost_MvNprec_knownMean(
                 model.state.β_x[k][ii,:],
                 model.state.β0_βx[k],
                 model.prior.Λ0_βx_df[k], model.prior.Λ0_βx_df[k] * model.prior.Λ0_βx_S0[k]))

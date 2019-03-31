@@ -1,6 +1,6 @@
 # sqfChol.jl
 
-export sqfChol_to_Σ;
+export sqfChol_to_Σ, PDMat_adj;
 
 ## Note this follows my unconventional definition of the square-root-free
 # Cholesky decomposition with construction from the back of the vector.
@@ -11,7 +11,7 @@ function sqfChol_to_Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Re
     βinvSqrtΔ = Matrix(βmat \ sqrtΔ)
     Σ = βinvSqrtΔ * βinvSqrtΔ'
 
-    PDMat(Σ)
+    PDMat_adj(Σ)
 end
 
 function lNX_sqfChol(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
@@ -71,3 +71,21 @@ end
 # out1 ≈ out2
 
 # naive implemtation (non-sequential) is far superior
+
+function PDMat_adj(A::Matrix{Float64},
+    epsfact::Float64=100.0, maxadd::Float64::1.0e-6, cumadd::Float64::0.0)
+
+    try PDMat(A)
+    catch excep
+        if isa(excep, PosDefException) && epsfact <= maxadd
+            a = epsfact * eps(Float64)
+            A += a * I
+            cumadd += a
+            epsfactnext *= epsfact
+        else
+            PDMat(A) # just trigger original error
+        end
+    end
+
+    return PDMat_adj(A, epsfactnext, maxadd, cumadd)
+end

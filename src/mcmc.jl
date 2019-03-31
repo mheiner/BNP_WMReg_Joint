@@ -196,7 +196,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                         σ[ig] *= adjust_from_accptr(accptr[h], localtarget, adjust_bnds)
                         tmp = StatsBase.cor2cov(ρ, σ)
                         tmp += Diagonal(fill(0.1*minimum(σ), size(tmp,1)))
-                        model.state.cSig_ηlδx[h] = PDMat(tmp)
+                        model.state.cSig_ηlδx[h] = PDMat_adj(tmp)
 
                     else
                         fails[h] = false
@@ -226,7 +226,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         Sighat = model.state.runningSS_ηlδx[h,:,:] / float(model.state.adapt_iter)
         minSighat = minimum(abs.(Sighat))
         SighatPD = Sighat + Matrix(Diagonal(fill(0.1*minSighat, d)))
-        model.state.cSig_ηlδx[h] = PDMat(collect_scale * SighatPD)
+        model.state.cSig_ηlδx[h] = PDMat_adj(collect_scale * SighatPD)
     end
 
     ## final scaling
