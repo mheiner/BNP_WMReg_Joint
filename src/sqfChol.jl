@@ -82,10 +82,9 @@ function PDMat_adj(A::Matrix{Float64},
             A += a * I
             cumadd += a
             epsfactnext = 10.0 * epsfact
+            PDMat_adj(A, epsfactnext, maxadd, cumadd)
         else
             PDMat(A) # just trigger original error
         end
     end
-
-    return PDMat_adj(A, epsfactnext, maxadd, cumadd)
 end
