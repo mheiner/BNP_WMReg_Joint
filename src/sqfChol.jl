@@ -73,7 +73,7 @@ end
 # naive implemtation (non-sequential) is far superior
 
 function PDMat_adj(A::Matrix{Float64},
-    epsfact::Float64=100.0, maxadd::Float64::1.0e-6, cumadd::Float64::0.0)
+    epsfact::Float64=100.0, maxadd::Float64=1.0e-6, cumadd::Float64=0.0)
 
     try PDMat(A)
     catch excep
