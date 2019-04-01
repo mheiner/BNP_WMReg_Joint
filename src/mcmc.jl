@@ -30,6 +30,10 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     for i in 1:n_keep
         for j in 1:thin
 
+            if updatevars.γ
+                update_γ!(model)
+            end
+
             if updatevars.η
                 Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
                 βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
@@ -43,10 +47,6 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
                         update_η_h_Met_K1!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
                     end
                 end
-            end
-
-            if updatevars.γ
-                update_γ!(model)
             end
 
             if updatevars.lω
@@ -137,7 +137,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale,
         updatevars,
         Monitor_DPmRegJoint(false, false, false, false),
-        report_filename, 1, 100)
+        report_filename, 1, n_iter_scale)
 
         for h = 1:model.H
             fails[h] = (accptr[h] < accptr_bnds[1])
@@ -179,7 +179,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
                 sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
                 Monitor_DPmRegJoint(false, false, false, false),
-                report_filename, 1, 100)
+                report_filename, 1, n_iter_scale)
 
                 for h = 1:model.H
                     too_low = accptr[h] < (accptr_bnds[1] * 0.5)
@@ -220,7 +220,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
     sims, accptr = mcmc_DPmRegJoint!(model, n_iter_collectSS, updatevars,
     Monitor_DPmRegJoint(false, false, false, false),
-    report_filename, 1, 100)
+    report_filename, 1, 1000)
 
     for h = 1:model.H
         Sighat = model.state.runningSS_ηlδx[h,:,:] / float(model.state.adapt_iter)
@@ -252,7 +252,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
         sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
         Monitor_DPmRegJoint(false, false, false, false),
-        report_filename, 1, 100)
+        report_filename, 1, n_iter_scale)
 
         for h = 1:model.H
             too_low = accptr[h] < accptr_bnds[1]
