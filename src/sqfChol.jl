@@ -72,17 +72,17 @@ end
 
 # naive implemtation (non-sequential) is far superior
 
-function PDMat_adj(A::Matrix{Float64},
-    epsfact::Float64=100.0, maxadd::Float64=1.0e-6, cumadd::Float64=0.0)
+function PDMat_adj(A::Matrix{Float64}, maxadd::Float64=1.0e-6,
+        epsfact::Float64=100.0, cumadd::Float64=0.0)
 
     try PDMat(A)
     catch excep
-        if isa(excep, PosDefException) && epsfact <= maxadd
+        if isa(excep, PosDefException) && cumadd <= maxadd
             a = epsfact * eps(Float64)
             A += a * I
             cumadd += a
             epsfactnext = 10.0 * epsfact
-            PDMat_adj(A, epsfactnext, maxadd, cumadd)
+            PDMat_adj(A, maxadd, epsfactnext, cumadd)
         else
             PDMat(A) # just trigger original error
         end
