@@ -46,14 +46,19 @@ mutable struct State_DPmRegJoint
 
     ### other state objects
     iter::Int
+
     accpt::Array{Int, 1} # H vector
     cSig_ηlδx::Array{PDMat{Float64}, 1}
     adapt::Bool
     adapt_iter::Union{Int, Nothing}
     runningsum_ηlδx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
     runningSS_ηlδx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
+
     lNX::Array{Float64, 2} # n by H matrix of log(pdf(Normal(x_i))) under each obs i and allocation h
     lωNX_vec::Array{Float64, 1} # n vector with log( sum_j ωN(x_i) )
+
+    lwimp::Float64 # log of importance weight for the current iteration (for tempered Gibbs sampling γ; deprecated)
+
     n_occup::Int
     llik::Float64
 
@@ -62,10 +67,10 @@ end
 ### Outer constructors for State_DPmRegJoint
 ## for coninuing an adapt phase
 function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
-    S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    S, lω::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
-    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, llik)
+    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
 
     State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
         deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
@@ -74,12 +79,28 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
         adapt, adapt_iter, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
-        deepcopy(lNX), deepcopy(lωNX_vec), length(unique(S)), llik)
+        deepcopy(lNX), deepcopy(lωNX_vec), lwimp, length(unique(S)), llik)
+end
+## same but includes v
+function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+    S, lω::Vector{Float64}, v::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    β0_βx, Λ0_βx, ν_δx, s0_δx,
+    iter, accpt, cSig_ηlδx,
+    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
+
+    State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(S), deepcopy(lω), v, α, deepcopy(β0star_ηy),
+        deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
+        deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
+        iter, accpt, deepcopy(cSig_ηlδx),
+        adapt, adapt_iter, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
+        deepcopy(lNX), deepcopy(lωNX_vec), lwimp, length(unique(S)), llik)
 end
 
 ## for starting new
 function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
-    S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    S, lω::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     cSig_ηlδx, adapt)
 
@@ -93,13 +114,33 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
-        zeros(Float64, 1, 1), zeros(Float64, 1),
+        zeros(Float64, 1, 1), zeros(Float64, 1), 0.0,
+        length(unique(S)), 0.0 )
+end
+
+## for starting new ( given a value of v )
+function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+    S, lω::Vector{Float64}, v::Vector{Float64}, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    β0_βx, Λ0_βx, ν_δx, s0_δx,
+    cSig_ηlδx, adapt)
+
+    State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(S), deepcopy(lω), deepcopy(v), α, deepcopy(β0star_ηy), deepcopy(Λ0star_ηy),
+        ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
+        deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
+        0, zeros(Int, length(lω)), deepcopy(cSig_ηlδx),
+        adapt, 0,
+        zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
+        zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
+                        Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
+        zeros(Float64, 1, 1), zeros(Float64, 1), 0.0,
         length(unique(S)), 0.0 )
 end
 
 ## for starting new but not adapting
 function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
-    S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+    S, lω::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx)
 
@@ -110,7 +151,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
         false, nothing, nothing, nothing,
-        zeros(Float64, 1, 1), zeros(Float64, 1),
+        zeros(Float64, 1, 1), zeros(Float64, 1), 0.0,
         length(unique(S)), 0.0)
 end
 
@@ -167,28 +208,29 @@ function Prior_DPmRegJoint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_
 end
 
 ## default prior spec
-function Prior_DPmRegJoint(K::Int, H::Int)
+function Prior_DPmRegJoint(K::Int, H::Int;
+    center_y::Float64=0.0, center_X::Vector{Float64}=zeros(K),
+    range_y::Float64=6.0, range_X::Vector{Float64}=fill(6.0, K)) # the default 6.0 assumes data standardized
 
-    Prior_DPmRegJoint(10.0, # α_sh
+    Prior_DPmRegJoint(3.0, # α_sh
     1.0, # α_rate
     fill(0.5, K, 2), # π_sh
-    zeros(K+1), # β0star_ηy_mean
-    PDMat(Matrix(Diagonal(vcat(16.0, fill(1.0, K))))), # β0star_ηy_Cov
+    vcat(center_y, zeros(K)), # β0star_ηy_mean
+    PDMat(Matrix(Diagonal(vcat((range_y/6.0)^2, fill(1.0, K))))), # β0star_ηy_Cov
     100.0*(K+1+2), # Λ0star_ηy_df
-    PDMat(Matrix(Diagonal(fill(1000.0, K+1)))), # Λ0star_ηy_S0
-    10.0, # s0_δy_df
-    0.1, # s0_δy_s0
-    zeros(K), # μ0_μx_mean
-    PDMat(Matrix(Diagonal(fill(16.0, K)))), # μ0_μx_Cov
-    10.0*(K+2), # Λ0_μx_df
-    PDMat(Matrix(Diagonal(fill(100.0, K)))), # Λ0_μx_S0
+    PDMat(Matrix(Diagonal( vcat((range_y/2.0)^2, fill(16.0, K)) ))), # Λ0star_ηy_S0
+    5.0, # s0_δy_df; guarantees second moment of IG prior
+    range_y/(5.0*4.0), # s0_δy_s0; the second number divides the range of y into quarters, the first is a SNR
+    center_X, # μ0_μx_mean
+    PDMat(Matrix(Diagonal( (range_X ./ 6.0).^2 ))), # μ0_μx_Cov; needs to stay in close to center_X
+    10.0*(K+2), # Λ0_μx_df; should be strong
+    PDMat(Matrix(Diagonal( (range_X ./ 2.0).^2  ))), # Λ0_μx_S0; should give flexibility to mu_xs
     (K > 1 ? [zeros(k) for k = (K-1):-1:1] : nothing), # β0_βx_mean
     (K > 1 ? [ PDMat(Matrix(Diagonal(fill(1.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
     (K > 1 ? fill(10.0*(K+2), K-1) : nothing), # Λ0_βx_df
     (K > 1 ? [ PDMat(Matrix(Diagonal(fill(4.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
     fill(5.0, K), # s0_δx_df
-    fill(0.25, K)) # s0_δy_s0
-
+    (range_X ./ 8.0).^2  ) # s0_δx_s0
 end
 
 
@@ -315,7 +357,7 @@ function reset_adapt!(model::Model_DPmRegJoint)
 end
 
 function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
-    prior::Prior_DPmRegJoint, random::Bool=true, γglobal::Bool=true)
+    prior::Prior_DPmRegJoint; random::Bool=true, γglobal::Bool=true)
 
     if random
         s0_δx = [ rand(InverseGamma(prior.s0_δx_df[k]/2.0, prior.s0_δx_df[k]*prior.s0_δx_s0[k]/2.0)) for k = 1:K ]
@@ -329,7 +371,9 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         Λ0star_ηy = PDMat( rand( Wishart(prior.Λ0star_ηy_df, inv(prior.Λ0star_ηy_S0)/prior.Λ0star_ηy_df) ) )
         β0star_ηy = rand( MvNormal(prior.β0star_ηy_mean, prior.β0star_ηy_Cov) )
         α = rand(Gamma(prior.α_sh, 1.0/prior.α_rate))
-        lω = log.(fill(1.0 / H, H)) # start with equal weights
+        # lω = log.(fill(1.0 / H, H)) # start with equal weights
+        lω, lv = rGenDirichlet(ones(H-1), fill(α, H-1); logout=true)
+        v = exp.(lv)
         S = [ sample(Weights(ones(H))) for i = 1:n ] # random allocation
 
         if γglobal
@@ -364,6 +408,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         β0star_ηy = deepcopy(prior.β0star_ηy_mean)
         α = prior.α_sh / prior.α_rate
         lω = log.(fill(1.0 / H, H))
+        v = lω_to_v(lω)
         S = [ sample(Weights(ones(H))) for i = 1:n ]
 
         if γglobal
@@ -372,9 +417,9 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
             γ = trues(H, K)
         end
 
-        # γδc = Inf
+        γδc = Inf
         # γδc = fill(1.0e6, K)
-        γδc = nothing
+        # γδc = nothing
         π_γ = fill(0.25, K)
 
         δ_x = vcat([ deepcopy(s0_δx) for h = 1:H ]'...)
@@ -391,7 +436,7 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
     adapt = false
 
     State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
-        S, lω, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
+        S, lω, v, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         cSig_ηlδx, adapt)
 end
@@ -414,4 +459,54 @@ function llik_DPmRegJoint(llik_numerator_mat::Array{T, 2},
     llik_num_vec = vec( BayesInference.logsumexp(llik_numerator_mat, 2) ) # n vector
     llik_vec = llik_num_vec - lωNX_vec
     return sum(llik_vec)
+end
+
+
+"""
+    rGenDirichlet(a, b[, logout])
+
+  Single draw from the generalized Dirichlet distribution (Connor and Mosimann '69), option for log scale. From SparseProbVec package.
+
+  ### Example
+  ```julia
+  a = ones(5)
+  b = ones(5)
+  rGenDirichlet(a, b)
+  ```
+"""
+function rGenDirichlet(a::Vector{Float64}, b::Vector{Float64}; logout::Bool=false)
+    n = length(a)
+    K = n + 1
+    length(b) == n || error("Dimension mismatch between a and b.")
+    all(a .> 0.0) || error("All elements of a must be positive.")
+    all(b .> 0.0) || error("All elements of b must be positive.")
+
+    lz = Vector{Float64}(undef, n)
+    loneminusz = Vector{Float64}(undef, n)
+    for i = 1:n
+        lx1 = log( rand( Distributions.Gamma( a[i] ) ) )
+        lx2 = log( rand( Distributions.Gamma( b[i] ) ) )
+        lxm = max(lx1, lx2)
+        lxsum = lxm + log( exp(lx1 - lxm) + exp(lx2 - lxm) ) # logsumexp
+        lz[i] = lx1 - lxsum
+        loneminusz[i] = lx2 - lxsum
+    end
+
+    ## break the Stick
+    lw = Vector{Float64}(undef, K)
+    lwhatsleft = 0.0
+
+    for i in 1:n
+        lw[i] = lz[i] + lwhatsleft
+        # lwhatsleft += log( 1.0 - exp(lw[i] - lwhatsleft) ) # logsumexp (not numerically stable)
+        lwhatsleft += loneminusz[i]
+    end
+    lw[K] = copy(lwhatsleft)
+
+    if logout
+        out = (lw, lz)
+    else
+        out = (exp.(lw), exp.(lz))
+    end
+    return out
 end

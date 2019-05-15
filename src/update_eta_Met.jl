@@ -25,7 +25,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
-    not_auto_reject = all( δ_x_h_cand .< 1.0e7 ) # place an upper bound on these variances
+    # not_auto_reject = all( δ_x_h_cand .< 1.0e7 ) # place an upper bound on these variances
 
     lNX_mat_cand = deepcopy(model.state.lNX)
 
@@ -80,7 +80,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                 sum(model.state.lωNX_vec)
 
             ## Decision and update
-            if log(rand()) < lar && not_auto_reject # accept
+            if log(rand()) < lar # && not_auto_reject # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 for k = 1:(model.K - 1)
@@ -144,7 +144,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
 
 
             ## Decision and update
-            if log(rand()) < lar && not_auto_reject # accept
+            if log(rand()) < lar # && not_auto_reject # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 for k = 1:(model.K - 1)
@@ -207,14 +207,14 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
-    not_auto_reject = all( δ_x_h_cand .< 0.5*model.state.γδc )
+    # not_auto_reject = all( δ_x_h_cand .< 0.5*1.0e7 )
 
     lNX_mat_cand = deepcopy(model.state.lNX)
 
     ## bookkeeping for variable selection
     if model.state.γδc == Inf || model.state.γδc == nothing # subset or integration method
         if model.state.γ[1]
-            lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
+            lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
             lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
         else
             lNX_mat_cand[:,h] = zeros(Float64, model.n)
@@ -238,7 +238,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
                 sum(model.state.lωNX_vec)
 
             ## Decision and update
-            if log(rand()) < lar && not_auto_reject # accept
+            if log(rand()) < lar # && not_auto_reject # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 model.state.δ_x[h,:] = deepcopy(δ_x_h_cand)
@@ -298,7 +298,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
                     Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
 
             ## Decision and update
-            if log(rand()) < lar && not_auto_reject # accept
+            if log(rand()) < lar # && not_auto_reject # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 model.state.δ_x[h,:] = deepcopy(δ_x_h_cand)

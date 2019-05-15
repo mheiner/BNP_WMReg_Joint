@@ -1,6 +1,6 @@
 # mcmc.jl
 
-export mcmc_DPmRegJoint!, adapt_DPmRegJoint!;
+export mcmc_DPmRegJoint!, adapt_DPmRegJoint!; #, est_imp;
 
 """
 mcmc_DPmRegJoint!(model, n_keep[, monitor, report_filename="out_progress.txt",
@@ -22,6 +22,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     prev_accpt = deepcopy(model.state.accpt) # set every report_freq iterations
 
     yX = hcat(model.y, model.X) # useful for allocation update
+    lfc_γon = zeros(model.K)
 
     ## Initialize lNX and lωNX_vec
     model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, model.state.γ)
@@ -31,7 +32,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
         for j in 1:thin
 
             if updatevars.γ
-                update_γ!(model)
+                lfc_γon = update_γ!(model)
             end
 
             if updatevars.η
@@ -85,6 +86,11 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 
         sims[i] = BayesInference.deepcopyFields(model.state, symb_monitor)
         sims[i][:Scounts] = counts(model.state.S, 1:model.H)
+
+        if updatevars.γ
+            # sims[i][:lwimp] = model.state.lwimp
+            sims[i][:lfc_on] = deepcopy(lfc_γon)
+        end
 
     end
 
@@ -279,3 +285,9 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
     return nothing
 end
+
+## estimate quantities with importance weights
+# function est_imp(x::Vector{Float64}, weights::Vector{Float64})
+#     sumw = sum(weights)
+#     return sum(x .* weights) / sumw
+# end

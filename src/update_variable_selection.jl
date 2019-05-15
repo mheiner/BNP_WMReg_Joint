@@ -121,7 +121,11 @@ function lNXmat_lωNXvec(model::Model_DPmRegJoint, γ::BitArray{1})
             lNX = zeros(Float64, model.n, model.H)
             lωNX_vec = zeros(Float64, model.n)
         elseif nγ == 1
-            σ2xs = [ sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ], model.state.δ_x[h,:] ).mat[γindx, γindx][1] for h = 1:model.H ]
+            if model.K > 1
+                σ2xs = [ sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ], model.state.δ_x[h,:] ).mat[γindx, γindx][1] for h = 1:model.H ]
+            else
+                σ2xs = deepcopy(model.state.δ_x[:,1])
+            end
             lNX = lNXmat(model.X[:,γindx], model.state.μ_x[:,γindx], σ2xs)
             lωNX_vec = lωNXvec(model.state.lω, lNX)
         elseif nγ > 1
@@ -165,11 +169,14 @@ function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) whe
     if model.state.γ[k]
         la +=  sum( lNy_old + lNx_old - model.state.lωNX_vec )
         lb +=  sum( lNy_alt + lNx_alt - lωNX_vec_alt )
-        lprob_switch = lb - BayesInference.logsumexp([la, lb])
+        ldenom = BayesInference.logsumexp([la, lb])
+        lprob_switch = lb - ldenom
+        lfc_on = la - ldenom
     else
         la += sum( lNy_alt + lNx_alt - lωNX_vec_alt )
         lb += sum( lNy_old + lNx_old - model.state.lωNX_vec )
         lprob_switch = la - BayesInference.logsumexp([la, lb])
+        lfc_on = deepcopy(lprob_switch)
     end
 
     switch = log(rand()) < lprob_switch
@@ -181,7 +188,7 @@ function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) whe
         lNy_old = deepcopy(lNy_alt)
     end
 
-    return nothing
+    return lfc_on
 end
 
 function update_γ!(model::Model_DPmRegJoint)
@@ -189,10 +196,100 @@ function update_γ!(model::Model_DPmRegJoint)
     ## calculate lNy
     lNy = ldens_y(model, model.state.γ)
 
+    up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
+    lfc_on = deepcopy(model.state.π_γ)
+
     ## loop through k
-    for k = 1:model.K
-        update_γ_k!(model, lNy, k)
+    for k in up_indx
+        lfc_on[k] = update_γ_k!(model, lNy, k)
     end
 
-    return nothing
+    return lfc_on
 end
+
+
+### Functions for Zanella & Roberts (2019) tempered Gibbs algorithm. (doesn't work embedded in larger Gibbs sampler)
+# function get_lp_γ(model::Model_DPmRegJoint, up_indx::Vector{Int}, κ_γ::T) where T <: Real
+#
+#     n_up = length(up_indx)
+#     lp_out = Vector{T}(undef, n_up)
+#     lfc_on = log.(deepcopy(model.state.π_γ))
+#
+#     lNX_out = [ Matrix{T}(undef, model.n, model.H) for ii = 1:n_up ]
+#     lωNX_vec_out = [ Vector{T}(undef, model.n) for ii = 1:n_up ]
+#
+#     lNy_old = ldens_y(model, model.state.γ)
+#     lNx_old = [ deepcopy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
+#
+#     lκ_γ = log(κ_γ)
+#     # lκ_γ = log(1000.0)
+#     ln_up = log( float(n_up) )
+#     l2 = log(2.0)
+#
+#     for ii = 1:n_up
+#         k = up_indx[ii]
+#
+#         γ_alt = deepcopy(model.state.γ)
+#         γ_alt[k] = !γ_alt[k]
+#
+#         lNy_alt = ldens_y(model, γ_alt)
+#         lNX_out[ii], lωNX_vec_out[ii] = lNXmat_lωNXvec(model, γ_alt)
+#
+#         lNx_alt = [ deepcopy(lNX_out[ii][i, model.state.S[i]]) for i = 1:model.n ]
+#
+#         lfc_part_on = log(model.state.π_γ[k]) # log prior probability of γ = 1
+#         lfc_part_off = log(1.0 - model.state.π_γ[k])
+#
+#         if model.state.γ[k]
+#             lfc_part_on +=  sum( lNy_old + lNx_old - model.state.lωNX_vec )
+#             lfc_part_off +=  sum( lNy_alt + lNx_alt - lωNX_vec_out[ii] )
+#             lfc_denom = BayesInference.logsumexp([lfc_part_on, lfc_part_off])
+#             lfc_on[k] = lfc_part_on - lfc_denom
+#
+#             lp_numer = BayesInference.logsumexp( [ lfc_on[k], lκ_γ - ln_up ] )
+#             lp_out[ii] = lp_numer - ( l2 + lfc_on[k] )
+#         else
+#             lfc_part_on += sum( lNy_alt + lNx_alt - lωNX_vec_out[ii] )
+#             lfc_part_off += sum( lNy_old + lNx_old - model.state.lωNX_vec )
+#             lfc_denom = BayesInference.logsumexp([lfc_part_on, lfc_part_off])
+#             lfc_on[k] = lfc_part_on - lfc_denom
+#             lfc_off = lfc_part_off - lfc_denom
+#
+#             lp_numer = BayesInference.logsumexp( [ lfc_on[k], lκ_γ - ln_up ] )
+#             lp_out[ii] = lp_numer - ( l2 + lfc_off )
+#         end
+#
+#     end
+#
+#     return lp_out, lNX_out, lωNX_vec_out, lfc_on
+# end
+#
+# function update_γ!(model::Model_DPmRegJoint) ## Zanella & Roberts (2019) tempered Gibbs algorithm.
+#
+#     up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
+#     d = length(up_indx)
+#
+#     if d > 0
+#         κ_γ = sum(model.state.π_γ[up_indx]) # apriori expected number of active lags (that aren't fixed on or off)
+#
+#         ## get weights
+#         lp, lNX_alt, lωNX_vec_alt, lfc_on = get_lp_γ(model, up_indx, κ_γ)
+#         lsump = BayesInference.logsumexp(lp)
+#         lp .-= lsump
+#
+#         ## select which indicator to switch
+#         switch_indx = StatsBase.sample(1:d, Weights(exp.(lp)))
+#
+#         ## switch the selected indicator
+#         model.state.γ[up_indx[switch_indx]] = !model.state.γ[up_indx[switch_indx]]
+#
+#         ## assign model state quantities
+#         model.state.lNX = lNX_alt[switch_indx]
+#         model.state.lωNX_vec = lωNX_vec_alt[switch_indx]
+#
+#         ## assign sample log importance weight
+#         model.state.lwimp = -lsump
+#     end
+#
+#     return lfc_on
+# end
