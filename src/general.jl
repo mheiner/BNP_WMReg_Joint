@@ -212,7 +212,7 @@ function Prior_DPmRegJoint(K::Int, H::Int;
     center_y::Float64=0.0, center_X::Vector{Float64}=zeros(K),
     range_y::Float64=6.0, range_X::Vector{Float64}=fill(6.0, K)) # the default 6.0 assumes data standardized
 
-    Prior_DPmRegJoint(3.0, # α_sh
+    Prior_DPmRegJoint(5.0, # α_sh
     1.0, # α_rate
     fill(0.5, K, 2), # π_sh
     vcat(center_y, zeros(K)), # β0star_ηy_mean
