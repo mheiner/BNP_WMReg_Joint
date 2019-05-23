@@ -20,7 +20,7 @@ end
 
 ## single component versions of these functions are found in update_eta_Met.jl
 ## This is the version that inflates variances
-function βδ_x_modify_γ(β_x::Array{Array{T, 2}, 1}, δ_x::Array{T, 2},
+function βδ_x_modify_γ(β_x::Union{Array{Array{T, 2}, 1}, Array{Any,1}}, δ_x::Array{T, 2},
                         γ::BitArray{1}, γδc::Array{T, 1}) where T <: Real
     modify_indx = findall(.!(γ))
     K = length(γ)
@@ -57,7 +57,7 @@ end
 
 ## single component versions of these functions are found in update_eta_Met.jl
 ## This is the version that subsets
-function βδ_x_modify_γ(β_x::Array{Array{T, 2}, 1}, δ_x::Array{T, 2},
+function βδ_x_modify_γ(β_x::Union{Array{Array{T, 2}, 1}, Array{Any,1}}, δ_x::Array{T, 2},
                         γ::BitArray{1}, γδc::Float64) where T <: Real
 
     γδc == Inf || throw("A single variance inflation should be equal to Inf")

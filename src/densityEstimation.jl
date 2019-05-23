@@ -3,7 +3,7 @@
 
 export ldensweight_mat, getEy, qnorm_mix, getQuant, getlogdens_EY;
 
-function ldensweight_mat(X_pred::Array{T,2}, sims::Array{Dict{Symbol,Any},1},
+function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},1}, Array{Any,1}},
     γδc::Union{Float64, Array{T, 1}, Nothing}=Inf) where T <: Real
 
     # fill(1.0e6, size(sims[1][:β_y])[2]) # default γδc under variance inflation method
@@ -122,7 +122,7 @@ end
 # h = 6
 # plot([scatter(x=X_pred[:,1], y=mean_dw[1,:,h], mode="scatter")])
 
-function getEy(X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Array{Dict{Symbol,Any},1}) where T <: Real
+function getEy(X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Union{Array{Dict{Symbol,Any},1}, Array{Any,1}}) where T <: Real
     nsim, npred, H = size(dw_mat)
     nsim2 = length(sims)
     H2, K = size(sims[1][:β_y])

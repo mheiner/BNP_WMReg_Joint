@@ -218,9 +218,9 @@ function Prior_DPmRegJoint(K::Int, H::Int;
     vcat(center_y, zeros(K)), # β0star_ηy_mean
     PDMat(Matrix(Diagonal(vcat((range_y/6.0)^2, fill(1.0, K))))), # β0star_ηy_Cov
     100.0*(K+1+2), # Λ0star_ηy_df
-    PDMat(Matrix(Diagonal( vcat((range_y/2.0)^2, fill(16.0, K)) ))), # Λ0star_ηy_S0
-    5.0, # s0_δy_df; guarantees second moment of IG prior
-    range_y/(5.0*4.0), # s0_δy_s0; the second number divides the range of y into quarters, the first is a SNR
+    PDMat(Matrix(Diagonal( vcat((range_y/2.0)^2, fill(4.0, K)) ))), # Λ0star_ηy_S0
+    5.0, # s0_δy_df
+    (range_y/6.0)^2 / 5.0, # s0_δy_s0; the outer divide follows a SNR arguement
     center_X, # μ0_μx_mean
     PDMat(Matrix(Diagonal( (range_X ./ 6.0).^2 ))), # μ0_μx_Cov; needs to stay in close to center_X
     10.0*(K+2), # Λ0_μx_df; should be strong
@@ -228,9 +228,9 @@ function Prior_DPmRegJoint(K::Int, H::Int;
     (K > 1 ? [zeros(k) for k = (K-1):-1:1] : nothing), # β0_βx_mean
     (K > 1 ? [ PDMat(Matrix(Diagonal(fill(1.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
     (K > 1 ? fill(10.0*(K+2), K-1) : nothing), # Λ0_βx_df
-    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(4.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
+    (K > 1 ? [ PDMat(Matrix(Diagonal(fill(2.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
     fill(5.0, K), # s0_δx_df
-    (range_X ./ 8.0).^2  ) # s0_δx_s0
+    (range_X ./ 8.0).^2 ) # s0_δx_s0
 end
 
 
@@ -357,17 +357,68 @@ function reset_adapt!(model::Model_DPmRegJoint)
 end
 
 function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
-    prior::Prior_DPmRegJoint; random::Bool=true, γglobal::Bool=true)
+    prior::Prior_DPmRegJoint; random::Int=1, γglobal::Bool=true)
 
-    if random
-        s0_δx = [ rand(InverseGamma(prior.s0_δx_df[k]/2.0, prior.s0_δx_df[k]*prior.s0_δx_s0[k]/2.0)) for k = 1:K ]
-        ν_δx = fill(5.0, K)
+    ν_δx = fill(5.0, K)
+    ν_δy = 5.0
+
+    γδc = Inf
+    # γδc = fill(1.0e6, K)
+    # γδc = nothing
+    π_γ = fill(0.25, K)
+
+    if γglobal
+        γ = trues(K) # always start with all variables
+    else
+        γ = trues(H, K)
+    end
+
+    if random == 0
+        s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
+        Λ0_βx = ( K > 1 ? [ inv(prior.Λ0_βx_S0[k]) for k = 1:(K-1) ] : nothing)
+        β0_βx = ( K > 1 ? [ prior.β0_βx_mean[k] for k = 1:(K-1) ] : nothing)
+        Λ0_μx = inv(prior.Λ0_μx_S0)
+        μ0_μx = deepcopy(prior.μ0_μx_mean)
+        s0_δy = deepcopy(prior.s0_δy_s0)
+        Λ0star_ηy = inv(prior.Λ0star_ηy_S0)
+        β0star_ηy = deepcopy(prior.β0star_ηy_mean)
+        α = prior.α_sh / prior.α_rate
+        lω = log.(fill(1.0 / H, H))
+        v = lω_to_v(lω)
+        S = [ sample(Weights(ones(H))) for i = 1:n ]
+        δ_x = vcat([ deepcopy(s0_δx) for h = 1:H ]'...)
+        β_x = ( K > 1 ? [ vcat( [deepcopy(β0_βx[k]) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
+        μ_x = vcat([ deepcopy(μ0_μx) for h = 1:H ]'...)
+        δ_y = fill(s0_δy, H)
+        β_y = vcat([ β0star_ηy[2:(K+1)] for h = 1:H ]'...)
+        μ_y = fill(β0star_ηy[1], H)
+    elseif random == 1 # G0 not random
+        s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
+        Λ0_βx = ( K > 1 ? [ inv(prior.Λ0_βx_S0[k]) for k = 1:(K-1) ] : nothing)
+        β0_βx = ( K > 1 ? [ prior.β0_βx_mean[k] for k = 1:(K-1) ] : nothing)
+        Λ0_μx = inv(prior.Λ0_μx_S0)
+        μ0_μx = deepcopy(prior.μ0_μx_mean)
+        s0_δy = deepcopy(prior.s0_δy_s0)
+        Λ0star_ηy = inv(prior.Λ0star_ηy_S0)
+        β0star_ηy = deepcopy(prior.β0star_ηy_mean)
+        α = rand(Gamma(prior.α_sh, 1.0/prior.α_rate))
+        # lω = log.(fill(1.0 / H, H)) # start with equal weights
+        lω, lv = rGenDirichlet(ones(H-1), fill(α, H-1); logout=true)
+        v = exp.(lv)
+        S = [ sample(Weights(ones(H))) for i = 1:n ] # random allocation
+        δ_x = [ rand(InverseGamma(ν_δx[k]/2.0, ν_δx[k]*s0_δx[k]/2.0)) for h=1:H, k=1:K ]
+        β_x = ( K > 1 ? [ vcat( [rand(MvNormal(β0_βx[k], inv(Λ0_βx[k]))) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
+        μ_x = vcat([ rand(MvNormal(μ0_μx, inv(Λ0_μx))) for h = 1:H ]'...)
+        δ_y = rand( InverseGamma(ν_δy/2.0, ν_δy*s0_δy/2.0), H )
+        β_y = vcat([ rand(MvNormal(β0star_ηy[2:(K+1)], inv(Λ0star_ηy).mat[2:(K+1), 2:(K+1)])) for h = 1:H ]'...)
+        μ_y = rand( Normal(β0star_ηy[1], sqrt(inv(Λ0star_ηy).mat[1,1])), H)
+    elseif random == 2
+        s0_δx = [ rand(Gamma(ν_δx[k]*prior.s0_δx_df[k]/2.0, 2.0*prior.s0_δx_s0[k]/(ν_δx[k]*prior.s0_δx_df[k]))) for k = 1:K ] # shape and scale
         Λ0_βx = ( K > 1 ? [ PDMat(rand(Wishart(prior.Λ0_βx_df[k], inv(prior.Λ0_βx_S0[k])/prior.Λ0_βx_df[k]))) for k = 1:(K-1) ] : nothing)
         β0_βx = ( K > 1 ? [ rand(MvNormal(prior.β0_βx_mean[k], prior.β0_βx_Cov[k])) for k = 1:(K-1) ] : nothing)
         Λ0_μx = PDMat( rand( Wishart(prior.Λ0_μx_df, inv(prior.Λ0_μx_S0)/prior.Λ0_μx_df) ) )
         μ0_μx = rand(MvNormal(prior.μ0_μx_mean, prior.μ0_μx_Cov))
-        s0_δy = rand(InverseGamma(prior.s0_δy_df/2.0, prior.s0_δy_df*prior.s0_δy_s0/2.0))
-        ν_δy = 5.0
+        s0_δy = rand(Gamma(ν_δy*prior.s0_δy_df/2.0, 2.0*prior.s0_δy_s0/(ν_δy*prior.s0_δy_df))) # the prior here was actually gamma
         Λ0star_ηy = PDMat( rand( Wishart(prior.Λ0star_ηy_df, inv(prior.Λ0star_ηy_S0)/prior.Λ0star_ηy_df) ) )
         β0star_ηy = rand( MvNormal(prior.β0star_ηy_mean, prior.β0star_ηy_Cov) )
         α = rand(Gamma(prior.α_sh, 1.0/prior.α_rate))
@@ -375,61 +426,12 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         lω, lv = rGenDirichlet(ones(H-1), fill(α, H-1); logout=true)
         v = exp.(lv)
         S = [ sample(Weights(ones(H))) for i = 1:n ] # random allocation
-
-        if γglobal
-            γ = trues(K) # always start with all variables
-        else
-            γ = trues(H, K)
-        end
-
-        # γδc = Inf
-        # γδc = fill(1.0e6, K)
-        γδc = nothing
-        π_γ = fill(0.25, K)
-
         δ_x = [ rand(InverseGamma(ν_δx[k]/2.0, ν_δx[k]*s0_δx[k]/2.0)) for h=1:H, k=1:K ]
-
         β_x = ( K > 1 ? [ vcat( [rand(MvNormal(β0_βx[k], inv(Λ0_βx[k]))) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
-
         μ_x = vcat([ rand(MvNormal(μ0_μx, inv(Λ0_μx))) for h = 1:H ]'...)
         δ_y = rand( InverseGamma(ν_δy/2.0, ν_δy*s0_δy/2.0), H )
         β_y = vcat([ rand(MvNormal(β0star_ηy[2:(K+1)], inv(Λ0star_ηy).mat[2:(K+1), 2:(K+1)])) for h = 1:H ]'...)
         μ_y = rand( Normal(β0star_ηy[1], sqrt(inv(Λ0star_ηy).mat[1,1])), H)
-    else
-        s0_δx = [ prior.s0_δx_s0[k] for k = 1:K ]
-        ν_δx = fill(5.0, K)
-        Λ0_βx = ( K > 1 ? [ inv(prior.Λ0_βx_S0[k]) for k = 1:(K-1) ] : nothing)
-        β0_βx = ( K > 1 ? [ prior.β0_βx_mean[k] for k = 1:(K-1) ] : nothing)
-        Λ0_μx = inv(prior.Λ0_μx_S0)
-        μ0_μx = deepcopy(prior.μ0_μx_mean)
-        s0_δy = deepcopy(prior.s0_δy_s0)
-        ν_δy = 5.0
-        Λ0star_ηy = inv(prior.Λ0star_ηy_S0)
-        β0star_ηy = deepcopy(prior.β0star_ηy_mean)
-        α = prior.α_sh / prior.α_rate
-        lω = log.(fill(1.0 / H, H))
-        v = lω_to_v(lω)
-        S = [ sample(Weights(ones(H))) for i = 1:n ]
-
-        if γglobal
-            γ = trues(K)
-        else
-            γ = trues(H, K)
-        end
-
-        γδc = Inf
-        # γδc = fill(1.0e6, K)
-        # γδc = nothing
-        π_γ = fill(0.25, K)
-
-        δ_x = vcat([ deepcopy(s0_δx) for h = 1:H ]'...)
-
-        β_x = ( K > 1 ? [ vcat( [deepcopy(β0_βx[k]) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
-
-        μ_x = vcat([ deepcopy(μ0_μx) for h = 1:H ]'...)
-        δ_y = fill(s0_δy, H)
-        β_y = vcat([ β0star_ηy[2:(K+1)] for h = 1:H ]'...)
-        μ_y = fill(β0star_ηy[1], H)
     end
 
     cSig_ηlδx = [ PDMat(Matrix(Diagonal(fill(0.1, Int(K+K*(K+1)/2))))) for h = 1:H ]
