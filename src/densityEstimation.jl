@@ -189,7 +189,7 @@ function qnorm_mix(q::Float64, μ::Vector{Float64}, σ::Vector{Float64}, w::Vect
 end
 
 
-function getQuant(q::Float64, X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Array{Dict{Symbol,Any},1}) where T <: Real
+function getQuant(q::Float64, X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Union{Array{Dict{Symbol,Any},1}, Array{Any,1}}) where T <: Real
     nsim, npred, H = size(dw_mat)
     nsim2 = length(sims)
     H2, K = size(sims[1][:β_y])
@@ -259,7 +259,7 @@ end
 
 
 function getlogdens_EY(X_pred::Array{T,2}, y_grid::Array{T,1},
-    ldw_mat::Array{T,3}, sims::Array{Dict{Symbol,Any},1}) where T <: Real
+    ldw_mat::Array{T,3}, sims::Union{Array{Dict{Symbol,Any},1}, Array{Any,1}}) where T <: Real
 
     ngrid = length(y_grid)
     nsim, npred, H = size(ldw_mat)

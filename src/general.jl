@@ -218,13 +218,13 @@ function Prior_DPmRegJoint(K::Int, H::Int;
     vcat(center_y, zeros(K)), # β0star_ηy_mean
     PDMat(Matrix(Diagonal(vcat((range_y/6.0)^2, fill(1.0, K))))), # β0star_ηy_Cov
     100.0*(K+1+2), # Λ0star_ηy_df
-    PDMat(Matrix(Diagonal( vcat((range_y/2.0)^2, fill(4.0, K)) ))), # Λ0star_ηy_S0
+    PDMat(Matrix(Diagonal( vcat((range_y/2.0)^2, fill(16.0, K)) ))), # Λ0star_ηy_S0
     5.0, # s0_δy_df
     (range_y/6.0)^2 / 5.0, # s0_δy_s0; the outer divide follows a SNR arguement
     center_X, # μ0_μx_mean
     PDMat(Matrix(Diagonal( (range_X ./ 6.0).^2 ))), # μ0_μx_Cov; needs to stay in close to center_X
     10.0*(K+2), # Λ0_μx_df; should be strong
-    PDMat(Matrix(Diagonal( (range_X ./ 2.0).^2  ))), # Λ0_μx_S0; should give flexibility to mu_xs
+    PDMat(Matrix(Diagonal( (range_X ./ 1.0).^2  ))), # Λ0_μx_S0; should give flexibility to mu_xs
     (K > 1 ? [zeros(k) for k = (K-1):-1:1] : nothing), # β0_βx_mean
     (K > 1 ? [ PDMat(Matrix(Diagonal(fill(1.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
     (K > 1 ? fill(10.0*(K+2), K-1) : nothing), # Λ0_βx_df
