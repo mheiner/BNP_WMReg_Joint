@@ -210,17 +210,19 @@ end
 ## default prior spec
 function Prior_DPmRegJoint(K::Int, H::Int;
     center_y::Float64=0.0, center_X::Vector{Float64}=zeros(K),
-    range_y::Float64=6.0, range_X::Vector{Float64}=fill(6.0, K)) # the default 6.0 assumes data standardized
+    range_y::Float64=6.0, range_X::Vector{Float64}=fill(6.0, K), snr::Float64=5.0) # the default 6.0 assumes data standardized
+
+    s0_δy_s0 = (range_y/6.0)^2 / snr
 
     Prior_DPmRegJoint(5.0, # α_sh
     1.0, # α_rate
     fill(0.5, K, 2), # π_sh
     vcat(center_y, zeros(K)), # β0star_ηy_mean
     PDMat(Matrix(Diagonal(vcat((range_y/6.0)^2, fill(1.0, K))))), # β0star_ηy_Cov
-    100.0*(K+1+2), # Λ0star_ηy_df
-    PDMat(Matrix(Diagonal( vcat((range_y/2.0)^2, fill(16.0, K)) ))), # Λ0star_ηy_S0
+    50.0*(K+1+2), # Λ0star_ηy_df # was multiplied by 100...
+    PDMat(Matrix(Diagonal( vcat((range_y/2.0)^2, fill(16.0, K)) ./ s0_δy_s0 ))), # Λ0star_ηy_S0
     5.0, # s0_δy_df
-    (range_y/6.0)^2 / 5.0, # s0_δy_s0; the outer divide follows a SNR arguement
+    s0_δy_s0, # s0_δy_s0; the outer divide follows a SNR arguement
     center_X, # μ0_μx_mean
     PDMat(Matrix(Diagonal( (range_X ./ 6.0).^2 ))), # μ0_μx_Cov; needs to stay in close to center_X
     10.0*(K+2), # Λ0_μx_df; should be strong
@@ -410,8 +412,8 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         β_x = ( K > 1 ? [ vcat( [rand(MvNormal(β0_βx[k], inv(Λ0_βx[k]))) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
         μ_x = vcat([ rand(MvNormal(μ0_μx, inv(Λ0_μx))) for h = 1:H ]'...)
         δ_y = rand( InverseGamma(ν_δy/2.0, ν_δy*s0_δy/2.0), H )
-        β_y = vcat([ rand(MvNormal(β0star_ηy[2:(K+1)], inv(Λ0star_ηy).mat[2:(K+1), 2:(K+1)])) for h = 1:H ]'...)
-        μ_y = rand( Normal(β0star_ηy[1], sqrt(inv(Λ0star_ηy).mat[1,1])), H)
+        β_y = vcat([ rand(MvNormal(β0star_ηy[2:(K+1)], δ_y[h]*inv(Λ0star_ηy).mat[2:(K+1), 2:(K+1)])) for h = 1:H ]'...)
+        μ_y = [ rand( Normal(β0star_ηy[1], sqrt(δ_y[h]*inv(Λ0star_ηy).mat[1,1])) ) for h = 1:H ]
     elseif random == 2
         s0_δx = [ rand(Gamma(ν_δx[k]*prior.s0_δx_df[k]/2.0, 2.0*prior.s0_δx_s0[k]/(ν_δx[k]*prior.s0_δx_df[k]))) for k = 1:K ] # shape and scale
         Λ0_βx = ( K > 1 ? [ PDMat(rand(Wishart(prior.Λ0_βx_df[k], inv(prior.Λ0_βx_S0[k])/prior.Λ0_βx_df[k]))) for k = 1:(K-1) ] : nothing)
@@ -430,8 +432,8 @@ function init_state_DPmRegJoint(n::Int, K::Int, H::Int,
         β_x = ( K > 1 ? [ vcat( [rand(MvNormal(β0_βx[k], inv(Λ0_βx[k]))) for h = 1:H]'... ) for k = 1:(K-1) ] : nothing)
         μ_x = vcat([ rand(MvNormal(μ0_μx, inv(Λ0_μx))) for h = 1:H ]'...)
         δ_y = rand( InverseGamma(ν_δy/2.0, ν_δy*s0_δy/2.0), H )
-        β_y = vcat([ rand(MvNormal(β0star_ηy[2:(K+1)], inv(Λ0star_ηy).mat[2:(K+1), 2:(K+1)])) for h = 1:H ]'...)
-        μ_y = rand( Normal(β0star_ηy[1], sqrt(inv(Λ0star_ηy).mat[1,1])), H)
+        β_y = vcat([ rand(MvNormal(β0star_ηy[2:(K+1)], δ_y[h]*inv(Λ0star_ηy).mat[2:(K+1), 2:(K+1)])) for h = 1:H ]'...)
+        μ_y = [ rand( Normal(β0star_ηy[1], sqrt(δ_y[h]*inv(Λ0star_ηy).mat[1,1]))) for h = 1:H ]
     end
 
     cSig_ηlδx = [ PDMat(Matrix(Diagonal(fill(0.1, Int(K+K*(K+1)/2))))) for h = 1:H ]
