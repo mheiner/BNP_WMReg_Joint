@@ -4,17 +4,21 @@ export mcmc_DPmRegJoint!, adapt_DPmRegJoint!; #, est_imp;
 
 """
 mcmc_DPmRegJoint!(model, n_keep[, monitor, report_filename="out_progress.txt",
-thin=1, report_freq=10000, samptypes])
+thin=1, report_freq=10000])
 """
 function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     updatevars::Updatevars_DPmRegJoint=Updatevars_DPmRegJoint(true, true, false, true, true, true),
     monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false, false),
-    report_filename::String="out_progress.txt", thin::Int=1,
-    report_freq::Int=100, samptypes=(Float32, Int32))
+    report_filename::Union{String, Nothing}="out_progress.txt", thin::Int=1,
+    report_freq::Int=100)
+
+    writeout = typeof(report_filename) == String
 
     ## output files
-    report_file = open(report_filename, "a+")
-    write(report_file, "Commencing MCMC at $(Dates.now()) for $(n_keep * thin) iterations.\n")
+    if writeout
+        report_file = open(report_filename, "a+")
+        write(report_file, "Commencing MCMC at $(Dates.now()) from iteration $(model.state.iter) for $(n_keep * thin) iterations.\n\n")
+    end
 
     sims, symb_monitor = postSimsInit_DPmRegJoint(monitor, n_keep, model.state)
     start_accpt = deepcopy(model.state.accpt)
@@ -77,9 +81,14 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 
             model.state.iter += 1
             if model.state.iter % report_freq == 0
-                write(report_file, "Iter $(model.state.iter) at $(Dates.now())\n")
-                write(report_file, "Log-likelihood $(model.state.llik)\n")
-                write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n\n")
+                if writeout
+                    write(report_file, "Iter $(model.state.iter) at $(Dates.now())\n")
+                    write(report_file, "Log-likelihood $(model.state.llik)\n")
+                    write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n")
+                    write(report_file, "Current allocation: $(counts(model.state.S, 1:model.H))\n")
+                    write(report_file, "Current final weight: $(exp(model.state.lω[model.H]))\n")
+                    write(report_file, "Current variable selection: $(1*model.state.γ)\n\n")
+                end
                 prev_accpt = deepcopy(model.state.accpt)
             end
         end
@@ -94,7 +103,9 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 
     end
 
-    close(report_file)
+    if writeout
+        close(report_file)
+    end
     return (sims, float((model.state.accpt - start_accpt)/(model.state.iter - start_iter)) )
 end
 
@@ -141,9 +152,10 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         end
 
         sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale,
-        updatevars,
-        Monitor_DPmRegJoint(false, false, false, false),
-        report_filename, 1, n_iter_scale)
+            updatevars,
+            Monitor_DPmRegJoint(false, false, false, false),
+            tries == 1 ? report_filename : nothing,
+            1, n_iter_scale)
 
         for h = 1:model.H
             fails[h] = (accptr[h] < accptr_bnds[1])
@@ -184,8 +196,9 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                 end
 
                 sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
-                Monitor_DPmRegJoint(false, false, false, false),
-                report_filename, 1, n_iter_scale)
+                    Monitor_DPmRegJoint(false, false, false, false),
+                    nothing,
+                    1, n_iter_scale)
 
                 for h = 1:model.H
                     too_low = accptr[h] < (accptr_bnds[1] * 0.5)
@@ -225,8 +238,8 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
     model.state.adapt = true
 
     sims, accptr = mcmc_DPmRegJoint!(model, n_iter_collectSS, updatevars,
-    Monitor_DPmRegJoint(false, false, false, false),
-    report_filename, 1, 1000)
+        Monitor_DPmRegJoint(false, false, false, false),
+        report_filename, 1, n_iter_collectSS)
 
     for h = 1:model.H
         Sighat = model.state.runningSS_ηlδx[h,:,:] / float(model.state.adapt_iter)
@@ -257,8 +270,9 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
         end
 
         sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
-        Monitor_DPmRegJoint(false, false, false, false),
-        report_filename, 1, n_iter_scale)
+            Monitor_DPmRegJoint(false, false, false, false),
+            tries == 1 ? report_filename : nothing,
+            1, n_iter_scale)
 
         for h = 1:model.H
             too_low = accptr[h] < accptr_bnds[1]
