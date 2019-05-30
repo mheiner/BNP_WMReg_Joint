@@ -25,7 +25,8 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
-    # not_auto_reject = all( δ_x_h_cand .< 1.0e7 ) # place an upper bound on these variances
+    auto_reject = (!all( δ_x_h_cand .> 0.0 )) || any( isinf( δ_x_h_cand ) )
+    not_auto_reject = !auto_reject
 
     lNX_mat_cand = deepcopy(model.state.lNX)
 
@@ -33,40 +34,75 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     γindx = findall(model.state.γ)
     nγ = length(γindx)
 
-    if model.state.γδc == Inf # subset method
-        if nγ == 0
-            lNX_mat_cand[:,h] = zeros(Float64, model.n)
-            lωNX_vec_cand = zeros(Float64, model.n) # n vector
-        elseif nγ == 1
-            lNX_mat_cand[:,h] = logpdf.( Normal(μ_x_h_cand[γindx[1]], sqrt(δ_x_h_cand[γindx[1]])), vec(model.X[:,γindx]) )
-            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
-        elseif nγ > 1
+    if not_auto_reject
+        if model.state.γδc == Inf # subset method
+            if nγ == 0
+                lNX_mat_cand[:,h] = zeros(Float64, model.n)
+                lωNX_vec_cand = zeros(Float64, model.n) # n vector
+            elseif nγ == 1
+                lNX_mat_cand[:,h] = logpdf.( Normal(μ_x_h_cand[γindx[1]], sqrt(δ_x_h_cand[γindx[1]])), vec(model.X[:,γindx]) )
+                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+            elseif nγ > 1
+                βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
+                    model.state.γ, model.state.γδc) # either variance-inflated or subset
+
+                tmp = lNX_sqfChol( Matrix(model.X[:,γindx]'),
+                    μ_x_h_cand[γindx], βγ_x_h_cand, δγ_x_h_cand, false ) # false means set to return nothing if not pos.def.
+
+                if tmp == nothing
+                    auto_reject = true
+                    not_auto_reject = !auto_reject
+                else
+                    lNX_mat_cand[:,h] = deepcopy(tmp)
+                    lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+                end
+
+            end
+        elseif model.state.γδc == nothing # integration method
+            if nγ == 0
+                lNX_mat_cand[:,h] = zeros(Float64, model.n)
+                lωNX_vec_cand = zeros(Float64, model.n) # n vector
+            elseif nγ == 1
+                tmp = sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand, false ) # false means don't throw error if not PosDef
+
+                if tmp == nothing
+                    auto_reject = true
+                    not_auto_reject = !auto_reject
+                else
+                    σ2x = tmp.mat[γindx, γindx][1]
+                    lNX_mat_cand[:,h] = logpdf.( Normal(μ_x_h_cand[γindx[1]], sqrt(σ2x)), vec(model.X[:,γindx]) )
+                    lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+                end
+
+            elseif nγ > 1
+
+                tmp = sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand, false ) # false means don't throw error if not PosDef
+
+                if tmp == nothing
+                    auto_reject = true
+                    not_auto_reject = !auto_reject
+                else
+                    Σx = PDMat( tmp.mat[γindx, γindx] )
+                    lNX_mat_cand[:,h] = logpdf( MultivariateNormal(μ_x_h_cand[γindx], Σx), Matrix(model.X[:,γindx]') )
+                    lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand)
+                end
+
+            end
+        else # variance-inflation method
             βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
                 model.state.γ, model.state.γδc) # either variance-inflated or subset
 
-            lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X[:,γindx]'),
-                μ_x_h_cand[γindx], βγ_x_h_cand, δγ_x_h_cand )
-            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
-        end
-    elseif model.state.γδc == nothing # integration method
-        if nγ == 0
-            lNX_mat_cand[:,h] = zeros(Float64, model.n)
-            lωNX_vec_cand = zeros(Float64, model.n) # n vector
-        elseif nγ == 1
-            σ2x = sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand ).mat[γindx, γindx][1]
-            lNX_mat_cand[:,h] = logpdf.( Normal(μ_x_h_cand[γindx[1]], sqrt(σ2x)), vec(model.X[:,γindx]) )
-            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
-        elseif nγ > 1
-            Σx = PDMat( sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand ).mat[γindx, γindx] )
-            lNX_mat_cand[:,h] = logpdf( MultivariateNormal(μ_x_h_cand[γindx], Σx), Matrix(model.X[:,γindx]') )
-            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand)
-        end
-    else # variance-inflation method
-        βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
-            model.state.γ, model.state.γδc) # either variance-inflated or subset
+            tmp = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand, false) # false means don't throw error if not PosDef
 
-        lNX_mat_cand[:,h] = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand )
-        lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+            if tmp == nothing
+                auto_reject = true
+                not_auto_reject = !auto_reject
+            else
+                lNX_mat_cand[:,h] = deepcopy(tmp)
+                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+            end
+
+        end
     end
 
     if n_h == 0
@@ -74,13 +110,15 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
         ## Metropolis step for η_x
 
             ## Compute acceptance ratio
-            lar = lG0_ηlδx(μ_x_h_cand, β_x_h_cand, lδ_x_h_cand, model.state) -
-                sum(lωNX_vec_cand) -
-                lG0_ηlδx(μ_x_h_old, β_x_h_old, lδ_x_h_old, model.state) +
-                sum(model.state.lωNX_vec)
+            if not_auto_reject
+                lar = lG0_ηlδx(μ_x_h_cand, β_x_h_cand, lδ_x_h_cand, model.state) -
+                    sum(lωNX_vec_cand) -
+                    lG0_ηlδx(μ_x_h_old, β_x_h_old, lδ_x_h_old, model.state) +
+                    sum(model.state.lωNX_vec)
+            end
 
             ## Decision and update
-            if log(rand()) < lar # && not_auto_reject # accept
+            if not_auto_reject && log(rand()) < lar # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 for k = 1:(model.K - 1)
@@ -125,26 +163,28 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
 
             ## Important quantities for candidate
-            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
+            if not_auto_reject
+                D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
 
-            Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
-            β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
+                Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
+                β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
 
-            a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-            b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                                y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
+                a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
+                b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
+                    y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
 
-            ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified βx and δx)
-            lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
-                model.state, μ_x_h_cand, β_x_h_cand, lδ_x_h_cand,
-                Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
+                ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified βx and δx)
+                lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
+                            model.state, μ_x_h_cand, β_x_h_cand, lδ_x_h_cand,
+                            Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
                 lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
-                    model.state, μ_x_h_old, β_x_h_old, lδ_x_h_old,
-                    Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
+                            model.state, μ_x_h_old, β_x_h_old, lδ_x_h_old,
+                            Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
 
+            end
 
             ## Decision and update
-            if log(rand()) < lar # && not_auto_reject # accept
+            if not_auto_reject && log(rand()) < lar # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 for k = 1:(model.K - 1)
@@ -207,24 +247,27 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
-    # not_auto_reject = all( δ_x_h_cand .< 0.5*1.0e7 )
+    auto_reject = (!all( δ_x_h_cand .> 0.0 )) || any( isinf( δ_x_h_cand ) )
+    not_auto_reject = !auto_reject
 
     lNX_mat_cand = deepcopy(model.state.lNX)
 
     ## bookkeeping for variable selection
-    if model.state.γδc == Inf || model.state.γδc == nothing # subset or integration method
-        if model.state.γ[1]
-            lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
+    if not_auto_reject
+        if model.state.γδc == Inf || model.state.γδc == nothing # subset or integration method
+            if model.state.γ[1]
+                lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
+                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+            else
+                lNX_mat_cand[:,h] = zeros(Float64, model.n)
+                lωNX_vec_cand = zeros(Float64, model.n) # n vector
+            end
+        else # variance-inflation method
+            δγ_x_h_cand = δ_x_h_modify_γ(δ_x_h_cand,
+            model.state.γ, model.state.γδc)
+            lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
             lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
-        else
-            lNX_mat_cand[:,h] = zeros(Float64, model.n)
-            lωNX_vec_cand = zeros(Float64, model.n) # n vector
         end
-    else # variance-inflation method
-        δγ_x_h_cand = δ_x_h_modify_γ(δ_x_h_cand,
-                                   model.state.γ, model.state.γδc)
-        lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
-        lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
     end
 
     if n_h == 0
@@ -232,13 +275,15 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
         ## Metropolis step for η_x
 
             ## Compute acceptance ratio
-            lar = lG0_ηlδx(μ_x_h_cand[1], lδ_x_h_cand[1], model.state) -
-                sum(lωNX_vec_cand) -
-                lG0_ηlδx(μ_x_h_old[1], lδ_x_h_old[1], model.state) +
-                sum(model.state.lωNX_vec)
+            if not_auto_reject
+                lar = lG0_ηlδx(μ_x_h_cand[1], lδ_x_h_cand[1], model.state) -
+                    sum(lωNX_vec_cand) -
+                    lG0_ηlδx(μ_x_h_old[1], lδ_x_h_old[1], model.state) +
+                    sum(model.state.lωNX_vec)
+            end
 
             ## Decision and update
-            if log(rand()) < lar # && not_auto_reject # accept
+            if not_auto_reject && log(rand()) < lar # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 model.state.δ_x[h,:] = deepcopy(δ_x_h_cand)
@@ -279,26 +324,28 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
             b1_δy_old = 0.5 * (model.state.ν_δy * model.state.s0_δy +
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
 
-            ## Important quantities for candidate
-            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
+            if not_auto_reject
+                ## Important quantities for candidate
+                D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
 
-            Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
-            β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
+                Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
+                β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
 
-            a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-            b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                                y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
+                a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
+                b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
+                    y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
 
-            ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified δx)
-            lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
-                model.state, μ_x_h_cand[1], lδ_x_h_cand[1],
-                Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
-                lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
-                    model.state, μ_x_h_old[1], lδ_x_h_old[1],
-                    Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
+                ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified δx)
+                lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
+                            model.state, μ_x_h_cand[1], lδ_x_h_cand[1],
+                            Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
+                        lcc_ηlδx(h, indx_h, model.state.lNX, model.state.lωNX_vec,
+                            model.state, μ_x_h_old[1], lδ_x_h_old[1],
+                            Λ1star_ηy_h_old, a1_δy_old, b1_δy_old)
+            end
 
             ## Decision and update
-            if log(rand()) < lar # && not_auto_reject # accept
+            if not_auto_reject && log(rand()) < lar  # accept
 
                 model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
                 model.state.δ_x[h,:] = deepcopy(δ_x_h_cand)

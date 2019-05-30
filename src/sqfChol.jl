@@ -4,25 +4,31 @@ export sqfChol_to_Σ, PDMat_adj;
 
 ## Note this follows my unconventional definition of the square-root-free
 # Cholesky decomposition with construction from the back of the vector.
-function sqfChol_to_Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
+function sqfChol_to_Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1},
+    pdthrowerror::Bool=true) where T <: Real
+
     sqrtΔ = Diagonal(sqrt.(δ))
     βmat = BayesInference.xpnd_tri(vcat(β...), false)'
 
     βinvSqrtΔ = Matrix(βmat \ sqrtΔ)
     Σ = βinvSqrtΔ * βinvSqrtΔ'
 
-    PDMat_adj(Σ)
+    PDMat_adj(Σ, pdthrowerror)
 end
 
 function lNX_sqfChol(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
-    β::Array{Array{T, 1}, 1}, δ::Array{T, 1}) where T <: Real
+    β::Array{Array{T, 1}, 1}, δ::Array{T, 1}, pdthrowerror::Bool=true) where T <: Real
 
     size(X,1) == length(μ) || throw("In lNX_sqfChol, the columns of X are the observations.")
 
-    Σ = sqfChol_to_Σ(β, δ)
-    d = MultivariateNormal(μ, Σ)
+    Σ = sqfChol_to_Σ(β, δ, pdthrowerror)
 
-    logpdf(d, X)
+    if Σ == nothing
+        return nothing
+    else
+        d = MultivariateNormal(μ, Σ)
+        return logpdf(d, X)
+    end
 end
 
 # function lNX_seq(x::Array{T, 1}, μ::Array{T, 1},
@@ -73,7 +79,7 @@ end
 # naive implemtation (non-sequential) is far superior
 
 function PDMat_adj(A::Matrix{Float64}, maxadd::Float64=1.0e-6,
-        epsfact::Float64=100.0, cumadd::Float64=0.0)
+        epsfact::Float64=100.0, cumadd::Float64=0.0, throwerror::Bool=true)
 
     try PDMat(A)
     catch excep
@@ -82,10 +88,14 @@ function PDMat_adj(A::Matrix{Float64}, maxadd::Float64=1.0e-6,
             A += a * I
             cumadd += a
             epsfactnext = 10.0 * epsfact
-            PDMat_adj(A, maxadd, epsfactnext, cumadd)
+            return PDMat_adj(A, maxadd, epsfactnext, cumadd)
         else
-            println("Failure to achieve positive definiteness.\n A = ", A, "\n")
-            PDMat(A) # just trigger original error
+            println("Failure to adjust to positive definiteness.\n A = ", A, "\n")
+            if throwerror
+                return PDMat(A) # just trigger original error
+            else
+                return nothing
+            end
         end
     end
 end
