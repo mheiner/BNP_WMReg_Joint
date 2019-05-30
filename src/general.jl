@@ -51,6 +51,7 @@ mutable struct State_DPmRegJoint
     cSig_ηlδx::Array{PDMat{Float64}, 1}
     adapt::Bool
     adapt_iter::Union{Int, Nothing}
+    adapt_thin::Union{Int, Nothing}
     runningsum_ηlδx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
     runningSS_ηlδx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
 
@@ -70,7 +71,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
-    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
+    adapt, adapt_iter, adapt_thin, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
 
     State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
         deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
@@ -78,7 +79,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
-        adapt, adapt_iter, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
+        adapt, adapt_iter, adapt_thin, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
         deepcopy(lNX), deepcopy(lωNX_vec), lwimp, length(unique(S)), llik)
 end
 ## same but includes v
@@ -86,7 +87,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
     S, lω::Vector{Float64}, v::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
-    adapt, adapt_iter, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
+    adapt, adapt_iter, adapt_thin, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
 
     State_DPmRegJoint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
         deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
@@ -94,7 +95,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
-        adapt, adapt_iter, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
+        adapt, adapt_iter, adapt_thin, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
         deepcopy(lNX), deepcopy(lωNX_vec), lwimp, length(unique(S)), llik)
 end
 
@@ -110,7 +111,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         0, zeros(Int, length(lω)), deepcopy(cSig_ηlδx),
-        adapt, 0,
+        adapt, 0, 1,
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
@@ -130,7 +131,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         0, zeros(Int, length(lω)), deepcopy(cSig_ηlδx),
-        adapt, 0,
+        adapt, 0, 1,
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
@@ -150,7 +151,7 @@ function State_DPmRegJoint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
         deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
-        false, nothing, nothing, nothing,
+        false, nothing, nothing, nothing, nothing,
         zeros(Float64, 1, 1), zeros(Float64, 1), 0.0,
         length(unique(S)), 0.0)
 end

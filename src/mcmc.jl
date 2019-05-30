@@ -1,12 +1,12 @@
 # mcmc.jl
 
-export mcmc_DPmRegJoint!, adapt_DPmRegJoint!; #, est_imp;
+export mcmc!, adapt!; #, est_imp;
 
 """
-mcmc_DPmRegJoint!(model, n_keep[, monitor, report_filename="out_progress.txt",
+mcmc!(model, n_keep[, monitor, report_filename="out_progress.txt",
 thin=1, report_freq=10000])
 """
-function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
+function mcmc!(model::Model_DPmRegJoint, n_keep::Int,
     updatevars::Updatevars_DPmRegJoint=Updatevars_DPmRegJoint(true, true, false, true, true, true),
     monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false, false),
     report_filename::Union{String, Nothing}="out_progress.txt", thin::Int=1,
@@ -18,6 +18,7 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
     if writeout
         report_file = open(report_filename, "a+")
         write(report_file, "Commencing MCMC at $(Dates.now()) from iteration $(model.state.iter) for $(n_keep * thin) iterations.\n\n")
+        close(report_file)
     end
 
     sims, symb_monitor = postSimsInit_DPmRegJoint(monitor, n_keep, model.state)
@@ -82,12 +83,14 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
             model.state.iter += 1
             if model.state.iter % report_freq == 0
                 if writeout
+                    report_file = open(report_filename, "a+")
                     write(report_file, "Iter $(model.state.iter) at $(Dates.now())\n")
                     write(report_file, "Log-likelihood $(model.state.llik)\n")
                     write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n")
                     write(report_file, "Current allocation: $(counts(model.state.S, 1:model.H))\n")
                     write(report_file, "Current final weight: $(exp(model.state.lω[model.H]))\n")
                     write(report_file, "Current variable selection: $(1*model.state.γ)\n\n")
+                    close(report_file)
                 end
                 prev_accpt = deepcopy(model.state.accpt)
             end
@@ -103,9 +106,6 @@ function mcmc_DPmRegJoint!(model::Model_DPmRegJoint, n_keep::Int,
 
     end
 
-    if writeout
-        close(report_file)
-    end
     return (sims, float((model.state.accpt - start_accpt)/(model.state.iter - start_iter)) )
 end
 
@@ -121,10 +121,13 @@ function adjust_from_accptr(accptr::T, target::T, adjust_bnds::Array{T,1}) where
 end
 
 
-function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_iter_scale::Int,
+function adapt!(model::Model_DPmRegJoint;
+    n_iter_collectSS::Int=1000, n_iter_scale::Int=500,
+    adapt_thin::Int=1,
     updatevars::Updatevars_DPmRegJoint,
     report_filename::String="out_progress.txt",
-    maxtries::Int=50, accptr_bnds::Vector{T}=[0.23, 0.44], adjust_bnds::Vector{T}=[0.01, 10.0]) where T <: Real
+    maxtries::Int=50,
+    accptr_bnds::Vector{T}=[0.23, 0.44], adjust_bnds::Vector{T}=[0.01, 10.0]) where T <: Real
 
     target = StatsBase.mean(accptr_bnds)
     d = Int((model.K + model.K*(model.K+1)/2))
@@ -151,7 +154,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             break
         end
 
-        sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale,
+        sims, accptr = mcmc!(model, n_iter_scale,
             updatevars,
             Monitor_DPmRegJoint(false, false, false, false),
             tries == 1 ? report_filename : nothing,
@@ -195,7 +198,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
                     break
                 end
 
-                sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
+                sims, accptr = mcmc!(model, n_iter_scale, updatevars,
                     Monitor_DPmRegJoint(false, false, false, false),
                     nothing,
                     1, n_iter_scale)
@@ -236,8 +239,9 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
 
     reset_adapt!(model)
     model.state.adapt = true
+    model.state.adapt_thin = deepcopy(adapt_thin)
 
-    sims, accptr = mcmc_DPmRegJoint!(model, n_iter_collectSS, updatevars,
+    sims, accptr = mcmc!(model, n_iter_collectSS, updatevars,
         Monitor_DPmRegJoint(false, false, false, false),
         report_filename, 1, n_iter_collectSS)
 
@@ -269,7 +273,7 @@ function adapt_DPmRegJoint!(model::Model_DPmRegJoint, n_iter_collectSS::Int, n_i
             break
         end
 
-        sims, accptr = mcmc_DPmRegJoint!(model, n_iter_scale, updatevars,
+        sims, accptr = mcmc!(model, n_iter_scale, updatevars,
             Monitor_DPmRegJoint(false, false, false, false),
             tries == 1 ? report_filename : nothing,
             1, n_iter_scale)
