@@ -84,6 +84,7 @@ function PDMat_adj(A::Matrix{Float64}, maxadd::Float64=1.0e-6,
             epsfactnext = 10.0 * epsfact
             PDMat_adj(A, maxadd, epsfactnext, cumadd)
         else
+            println("Failure to achieve positive definiteness.\n A = ", A, "\n")
             PDMat(A) # just trigger original error
         end
     end
