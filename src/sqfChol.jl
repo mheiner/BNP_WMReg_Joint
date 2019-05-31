@@ -13,7 +13,7 @@ function sqfChol_to_Σ(β::Array{Array{T, 1}, 1}, δ::Array{T, 1},
     βinvSqrtΔ = Matrix(βmat \ sqrtΔ)
     Σ = βinvSqrtΔ * βinvSqrtΔ'
 
-    PDMat_adj(Σ, pdthrowerror)
+    PDMat_adj(Σ, throwerror=pdthrowerror)
 end
 
 function lNX_sqfChol(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
@@ -78,7 +78,7 @@ end
 
 # naive implemtation (non-sequential) is far superior
 
-function PDMat_adj(A::Matrix{Float64}, maxadd::Float64=1.0e-6,
+function PDMat_adj(A::Matrix{Float64}; maxadd::Float64=1.0e-6,
         epsfact::Float64=100.0, cumadd::Float64=0.0, throwerror::Bool=true)
 
     try PDMat(A)
@@ -88,7 +88,8 @@ function PDMat_adj(A::Matrix{Float64}, maxadd::Float64=1.0e-6,
             A += a * I
             cumadd += a
             epsfactnext = 10.0 * epsfact
-            return PDMat_adj(A, maxadd, epsfactnext, cumadd)
+            return PDMat_adj(A, maxadd=maxadd, epsfact=epsfactnext,
+                    cumadd=cumadd, throwerror=throwerror)
         else
             println("Failure to adjust to positive definiteness.\n A = ", A, "\n")
             if throwerror

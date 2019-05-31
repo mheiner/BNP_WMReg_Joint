@@ -25,7 +25,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
-    auto_reject = (!all( δ_x_h_cand .> 0.0 )) || any( isinf( δ_x_h_cand ) )
+    auto_reject = (!all( δ_x_h_cand .> 0.0 )) || any( isinf.( δ_x_h_cand ) )
     not_auto_reject = !auto_reject
 
     lNX_mat_cand = deepcopy(model.state.lNX)
@@ -247,7 +247,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
     lδ_x_h_cand = ηlδ_x_cand[model.indx_ηx[:δ]]
     δ_x_h_cand = exp.(lδ_x_h_cand)
 
-    auto_reject = (!all( δ_x_h_cand .> 0.0 )) || any( isinf( δ_x_h_cand ) )
+    auto_reject = (!all( δ_x_h_cand .> 0.0 )) || any( isinf.( δ_x_h_cand ) )
     not_auto_reject = !auto_reject
 
     lNX_mat_cand = deepcopy(model.state.lNX)
