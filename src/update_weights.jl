@@ -96,9 +96,9 @@ function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::
 
             for h = 1:HH
                 if cand[h] < v[h]
-                    L[h] = copy(cand[h])
+                    L[h] = deepcopy(cand[h])
                 else
-                    R[h] = copy(cand[h])
+                    R[h] = deepcopy(cand[h])
                 end
                 ## equivalent to
                 # cand[h] < v[h] ? L[h] = copy(cand[h]) : R[h] = copy(cand[h])

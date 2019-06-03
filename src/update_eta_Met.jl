@@ -82,7 +82,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                     auto_reject = true
                     not_auto_reject = !auto_reject
                 else
-                    Σx = PDMat( tmp.mat[γindx, γindx] )
+                    Σx = PDMat_adj( tmp.mat[γindx, γindx] )
                     lNX_mat_cand[:,h] = logpdf( MultivariateNormal(μ_x_h_cand[γindx], Σx), Matrix(model.X[:,γindx]') )
                     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand)
                 end
