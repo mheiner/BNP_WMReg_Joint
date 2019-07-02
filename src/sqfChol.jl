@@ -27,7 +27,15 @@ function lNX_sqfChol(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
         return nothing
     else
         d = MultivariateNormal(μ, Σ)
-        return logpdf(d, X)
+        try logpdf(d, X)
+        catch excep
+            if isa(excep, SingularException)
+                println("Singular exception in lNX_sqfChol.\n")
+                return nothing
+            else
+                return logpdf(d, X)
+            end
+        end
     end
 end
 
