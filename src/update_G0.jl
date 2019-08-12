@@ -50,7 +50,7 @@ function rpost_IGs0_gammaPri(δ::Array{T,1}, ν::T, n0::T, s00::T) where T <: Re
     rand( Distributions.Gamma(sh_out, 1.0 / rate_out) )
 end
 
-function update_G0!(model::Model_DPmRegJoint)
+function update_G0!(model::Model_BNP_WMReg_Joint)
     ii = sort(unique(model.state.S))
 
     βstar_ηy = hcat(model.state.μ_y[ii], model.state.β_y[ii,:])

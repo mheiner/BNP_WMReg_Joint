@@ -2,7 +2,7 @@
 
 export βδ_x_modify_γ, δ_x_modify_γ, lNXmat_lωNXvec;
 
-function ldens_y(model::Model_DPmRegJoint, γ_cand::BitArray{1})
+function ldens_y(model::Model_BNP_WMReg_Joint, γ_cand::BitArray{1})
 
     lNy = zeros(typeof(model.y[1]), model.n)
     γcand_indx = findall(γ_cand) # currently assumes global γ
@@ -93,7 +93,7 @@ end
 
 
 ## Calculate lNX and lωNXvec under different variable selection methods
-function lNXmat_lωNXvec(model::Model_DPmRegJoint, γ::BitArray{1})
+function lNXmat_lωNXvec(model::Model_BNP_WMReg_Joint, γ::BitArray{1})
 
     γindx = findall(γ)
     nγ = length(γindx)
@@ -115,7 +115,7 @@ function lNXmat_lωNXvec(model::Model_DPmRegJoint, γ::BitArray{1})
             lωNX_vec = lωNXvec(model.state.lω, lNX)
         end
 
-    elseif model.state.γδc == nothing # integration method for variable selection
+    elseif isnothing(model.state.γδc) # integration method for variable selection
 
         if nγ == 0
             lNX = zeros(Float64, model.n, model.H)
@@ -152,7 +152,7 @@ end
 
 
 
-function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) where T <: Real
+function update_γ_k!(model::Model_BNP_WMReg_Joint, lNy_old::Array{T,1}, k::Int) where T <: Real
 
     γ_alt = deepcopy(model.state.γ)
     γ_alt[k] = !γ_alt[k]
@@ -191,7 +191,7 @@ function update_γ_k!(model::Model_DPmRegJoint, lNy_old::Array{T,1}, k::Int) whe
     return lfc_on
 end
 
-function update_γ!(model::Model_DPmRegJoint)
+function update_γ!(model::Model_BNP_WMReg_Joint)
 
     ## calculate lNy
     lNy = ldens_y(model, model.state.γ)
@@ -209,7 +209,7 @@ end
 
 
 ### Functions for Zanella & Roberts (2019) tempered Gibbs algorithm. (doesn't work embedded in larger Gibbs sampler)
-# function get_lp_γ(model::Model_DPmRegJoint, up_indx::Vector{Int}, κ_γ::T) where T <: Real
+# function get_lp_γ(model::Model_BNP_WMReg_Joint, up_indx::Vector{Int}, κ_γ::T) where T <: Real
 #
 #     n_up = length(up_indx)
 #     lp_out = Vector{T}(undef, n_up)
@@ -264,7 +264,7 @@ end
 #     return lp_out, lNX_out, lωNX_vec_out, lfc_on
 # end
 #
-# function update_γ!(model::Model_DPmRegJoint) ## Zanella & Roberts (2019) tempered Gibbs algorithm.
+# function update_γ!(model::Model_BNP_WMReg_Joint) ## Zanella & Roberts (2019) tempered Gibbs algorithm.
 #
 #     up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
 #     d = length(up_indx)

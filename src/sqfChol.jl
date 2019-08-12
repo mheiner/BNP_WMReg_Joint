@@ -23,7 +23,7 @@ function lNX_sqfChol(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1},
 
     Σ = sqfChol_to_Σ(β, δ, pdthrowerror)
 
-    if Σ == nothing
+    if isnothing(Σ)
         return nothing
     else
         d = MultivariateNormal(μ, Σ)

@@ -3,7 +3,7 @@
 export βδ_x_h_modify_γ, δ_x_h_modify_γ;
 
 # pre_compute Λ0star_ηy*β0star_ηy and β0star_ηy'Λ0star_ηy*β0star_ηy which are not indexed by h
-function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
+function update_η_h_Met!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
 
     ## if you modify this function, you must modify its K1 twin below.
 
@@ -49,7 +49,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                 tmp = lNX_sqfChol( Matrix(model.X[:,γindx]'),
                     μ_x_h_cand[γindx], βγ_x_h_cand, δγ_x_h_cand, false ) # false means set to return nothing if not pos.def.
 
-                if tmp == nothing
+                if isnothing(tmp)
                     auto_reject = true
                     not_auto_reject = !auto_reject
                 else
@@ -58,14 +58,14 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
                 end
 
             end
-        elseif model.state.γδc == nothing # integration method
+        elseif isnothing(model.state.γδc) # integration method
             if nγ == 0
                 lNX_mat_cand[:,h] = zeros(Float64, model.n)
                 lωNX_vec_cand = zeros(Float64, model.n) # n vector
             elseif nγ == 1
                 tmp = sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand, false ) # false means don't throw error if not PosDef
 
-                if tmp == nothing
+                if isnothing(tmp)
                     auto_reject = true
                     not_auto_reject = !auto_reject
                 else
@@ -78,7 +78,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
 
                 tmp = sqfChol_to_Σ( β_x_h_cand, δ_x_h_cand, false ) # false means don't throw error if not PosDef
 
-                if tmp == nothing
+                if isnothing(tmp)
                     auto_reject = true
                     not_auto_reject = !auto_reject
                 else
@@ -94,7 +94,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
 
             tmp = lNX_sqfChol( Matrix(model.X'), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand, false) # false means don't throw error if not PosDef
 
-            if tmp == nothing
+            if isnothing(tmp)
                 auto_reject = true
                 not_auto_reject = !auto_reject
             else
@@ -230,7 +230,7 @@ function update_η_h_Met!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array
     return nothing
 end
 
-function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
+function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
 
     ## if you modify this function, you must modify the original above.
 
@@ -254,7 +254,7 @@ function update_η_h_Met_K1!(model::Model_DPmRegJoint, h::Int, Λβ0star_ηy::Ar
 
     ## bookkeeping for variable selection
     if not_auto_reject
-        if model.state.γδc == Inf || model.state.γδc == nothing # subset or integration method
+        if model.state.γδc == Inf || isnothing(model.state.γδc) # subset or integration method
             if model.state.γ[1]
                 lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
                 lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
@@ -402,7 +402,7 @@ function construct_Dh(h::Int, Xh::Array{T, 2}, μ_x_h::Array{T, 1},
 end
 
 function lG0_ηlδx(μ_x::Array{T, 1}, β_x::Array{Array{T, 1}, 1}, lδ_x::Array{T, 1},
-                  state::State_DPmRegJoint) where T <: Real
+                  state::State_BNP_WMReg_Joint) where T <: Real
 
     K = length(μ_x)
     Q_μ = - 0.5 * PDMats.quad( state.Λ0_μx, (μ_x - state.μ0_μx) )
@@ -426,7 +426,7 @@ function lG0_ηlδx(μ_x::Array{T, 1}, β_x::Array{Array{T, 1}, 1}, lδ_x::Array
     return Q
 end
 function lG0_ηlδx(μ_x::T, lδ_x::T,
-                  state::State_DPmRegJoint) where T <: Real
+                  state::State_BNP_WMReg_Joint) where T <: Real
     ## K = 1 case
     Q_μ = - 0.5 * Matrix(state.Λ0_μx)[1] * (μ_x - state.μ0_μx[1])^2.0
     Q_δ = - 0.5 * ( state.ν_δx[1]*lδ_x + state.ν_δx[1]*state.s0_δx[1]/exp(lδ_x) ) # Jacobian built in
@@ -437,7 +437,7 @@ end
 
 ### log-collapsed conditional
 function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_vec::Array{T, 1},
-    state::State_DPmRegJoint, μ_x_h::Array{T, 1}, β_x_h::Array{Array{T, 1}, 1}, lδ_x_h::Array{T, 1},
+    state::State_BNP_WMReg_Joint, μ_x_h::Array{T, 1}, β_x_h::Array{Array{T, 1}, 1}, lδ_x_h::Array{T, 1},
     Λ1star_ηy_h::PDMat{T}, a1_δy::T, b1_δy::T) where T <: Real
 
     # Q1
@@ -459,7 +459,7 @@ function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_v
 
 end
 function lcc_ηlδx(h::Int, indx_h::Array{Int, 1}, lNX_mat::Array{T, 2}, lωNX_vec::Array{T, 1},
-    state::State_DPmRegJoint, μ_x_h::T, lδ_x_h::T,
+    state::State_BNP_WMReg_Joint, μ_x_h::T, lδ_x_h::T,
     Λ1star_ηy_h::PDMat{T}, a1_δy::T, b1_δy::T) where T <: Real
 
     ## K = 1 case

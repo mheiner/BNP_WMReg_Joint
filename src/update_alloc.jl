@@ -119,7 +119,7 @@ function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
     return lW # lW is a n by H matrix
 end
 
-function update_alloc!(model::Model_DPmRegJoint, yX::Array{T,2}) where T <: Real
+function update_alloc!(model::Model_BNP_WMReg_Joint, yX::Array{T,2}) where T <: Real
 
     lW = llik_numerator(yX, model.K, model.H,
             model.state.μ_y, model.state.β_y, model.state.δ_y,

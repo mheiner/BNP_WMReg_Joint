@@ -39,7 +39,7 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
                                          βγ_x, δγ_x) # npred by H matrix
                     end
 
-                elseif γδc == nothing  # integration method
+                elseif isnothing(γδc) # integration method
                     γindx = findall(sims[ii][:γ])
                     nγ = length( γindx )
 
@@ -81,7 +81,7 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
 
             if useγ
 
-                    if γδc == Inf || γδc == nothing # subset or integration method
+                    if γδc == Inf || isnothing(γδc) # subset or integration method
 
                         if sims[ii][:γ][1]
                             lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(sims[ii][:δ_x])) # npred by H matrix

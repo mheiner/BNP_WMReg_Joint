@@ -1,4 +1,4 @@
-module DPmRegJoint
+module BNP_WMReg_Joint
 
 using Dates
 using LinearAlgebra

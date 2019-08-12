@@ -110,13 +110,13 @@ function mvSlice_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1}, lNX_mat::
     return cand, lωNX_vec_out
 end
 
-function update_vlω_mvSlice!(model::Model_DPmRegJoint) where T <: Real
+function update_vlω_mvSlice!(model::Model_BNP_WMReg_Joint) where T <: Real
 
     M = StatsBase.counts(model.state.S, 1:model.H)
     a_v = 1.0 .+ M[1:(model.H-1)]
     b_v = reverse( model.state.α .+ cumsum( reverse( M[2:model.H] ) ) )
 
-    if (model.state.γδc == Inf || model.state.γδc == nothing) && sum(model.state.γ) == 0
+    if ( model.state.γδc == Inf || isnothing(model.state.γδc) ) && sum(model.state.γ) == 0
         v_new = [ rand( Beta(a_v[h], b_v[h]) ) for h = 1:(model.H-1) ]
     else
         v_new, lωNX_vec_new = mvSlice_v(model.state.v, a_v, b_v, model.state.lNX)

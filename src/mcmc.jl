@@ -6,9 +6,9 @@ export mcmc!, adapt!; #, est_imp;
 mcmc!(model, n_keep[, monitor, report_filename="out_progress.txt",
 thin=1, report_freq=10000])
 """
-function mcmc!(model::Model_DPmRegJoint, n_keep::Int,
-    updatevars::Updatevars_DPmRegJoint=Updatevars_DPmRegJoint(true, true, false, true, true, true),
-    monitor::Monitor_DPmRegJoint=Monitor_DPmRegJoint(true, false, false, false),
+function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
+    updatevars::Updatevars_BNP_WMReg_Joint=Updatevars_BNP_WMReg_Joint(true, true, false, true, true, true),
+    monitor::Monitor_BNP_WMReg_Joint=Monitor_BNP_WMReg_Joint(true, false, false, false),
     report_filename::Union{String, Nothing}="out_progress.txt", thin::Int=1,
     report_freq::Int=100)
 
@@ -21,7 +21,7 @@ function mcmc!(model::Model_DPmRegJoint, n_keep::Int,
         close(report_file)
     end
 
-    sims, symb_monitor = postSimsInit_DPmRegJoint(monitor, n_keep, model.state)
+    sims, symb_monitor = postSimsInit_BNP_WMReg_Joint(monitor, n_keep, model.state)
     start_accpt = deepcopy(model.state.accpt)
     start_iter = deepcopy(model.state.iter)
     prev_accpt = deepcopy(model.state.accpt) # set every report_freq iterations
@@ -77,7 +77,7 @@ function mcmc!(model::Model_DPmRegJoint, n_keep::Int,
                         model.state.μ_x, model.state.β_x, model.state.δ_x,
                         model.state.γ, model.state.γδc, model.state.lω)
             end
-            model.state.llik = llik_DPmRegJoint(llik_num_mat, model.state.lωNX_vec)
+            model.state.llik = llik_BNP_WMReg_Joint(llik_num_mat, model.state.lωNX_vec)
 
 
             model.state.iter += 1
@@ -121,10 +121,10 @@ function adjust_from_accptr(accptr::T, target::T, adjust_bnds::Array{T,1}) where
 end
 
 
-function adapt!(model::Model_DPmRegJoint;
+function adapt!(model::Model_BNP_WMReg_Joint;
     n_iter_collectSS::Int=1000, n_iter_scale::Int=500,
     adapt_thin::Int=1,
-    updatevars::Updatevars_DPmRegJoint,
+    updatevars::Updatevars_BNP_WMReg_Joint,
     report_filename::String="out_progress.txt",
     maxtries::Int=50,
     accptr_bnds::Vector{T}=[0.23, 0.44], adjust_bnds::Vector{T}=[0.01, 10.0]) where T <: Real
@@ -156,7 +156,7 @@ function adapt!(model::Model_DPmRegJoint;
 
         sims, accptr = mcmc!(model, n_iter_scale,
             updatevars,
-            Monitor_DPmRegJoint(false, false, false, false),
+            Monitor_BNP_WMReg_Joint(false, false, false, false),
             tries == 1 ? report_filename : nothing,
             1, n_iter_scale)
 
@@ -199,7 +199,7 @@ function adapt!(model::Model_DPmRegJoint;
                 end
 
                 sims, accptr = mcmc!(model, n_iter_scale, updatevars,
-                    Monitor_DPmRegJoint(false, false, false, false),
+                    Monitor_BNP_WMReg_Joint(false, false, false, false),
                     nothing,
                     1, n_iter_scale)
 
@@ -242,7 +242,7 @@ function adapt!(model::Model_DPmRegJoint;
     model.state.adapt_thin = deepcopy(adapt_thin)
 
     sims, accptr = mcmc!(model, n_iter_collectSS, updatevars,
-        Monitor_DPmRegJoint(false, false, false, false),
+        Monitor_BNP_WMReg_Joint(false, false, false, false),
         report_filename, 1, n_iter_collectSS)
 
     for h = 1:model.H
@@ -274,7 +274,7 @@ function adapt!(model::Model_DPmRegJoint;
         end
 
         sims, accptr = mcmc!(model, n_iter_scale, updatevars,
-            Monitor_DPmRegJoint(false, false, false, false),
+            Monitor_BNP_WMReg_Joint(false, false, false, false),
             tries == 1 ? report_filename : nothing,
             1, n_iter_scale)
 

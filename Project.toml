@@ -1,4 +1,4 @@
-name = "DPmRegJoint"
+name = "BNP_WMReg_Joint"
 uuid = "dd2e0ace-cd18-11e8-09d7-894d176eb2bf"
 authors = ["Matt Heiner <mheiner@gmail.com>"]
 version = "0.4.3"
