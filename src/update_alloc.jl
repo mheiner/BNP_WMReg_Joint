@@ -1,6 +1,6 @@
 # update_alloc.jl
 
-export llik_numerator;
+export llik_numerator, llik_numerator_Σx_diag;
 
 function llik_numerator(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
@@ -10,9 +10,12 @@ function llik_numerator(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     γ::BitArray{1}, γδc::Union{Float64, Array{T, 1}, Nothing},
     lω::Array{T, 1}) where T <: Real
 
-    yX = hcat(y, X)
-
-    return llik_numerator(yX, K, H, μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, lω)
+    if isnothing(β_x) && K > 1 # indicates that Σx_type == :diag
+        return llik_numerator_Σx_diag(y, X, K, H, μ_y, β_y, δ_y, μ_x, δ_x, γ, lω)
+    else
+        yX = hcat(y, X)
+        return llik_numerator(yX, K, H, μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, lω)
+    end
 end
 function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
     μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
@@ -119,9 +122,54 @@ function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
     return lW # lW is a n by H matrix
 end
 
+function llik_numerator_Σx_diag(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
+    μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
+    μ_x::Array{T, 2},
+    δ_x::Array{Float64,2},
+    γ::BitArray{1}, # compatible with both subset and integration methods
+    lω::Array{T, 1}) where T <: Real
+
+    n = length(y)
+    γindx = findall(γ)
+
+    lW = zeros(Float64, n, H)
+
+    for i = 1:n
+        for h = 1:H
+            mean_y = deepcopy(μ_y[h])
+            for k in γindx
+                mean_y -= β_y[h, k] * (X[i,k] - μ_x[h, k])
+                lW[i,h] += -0.5*log( 2.0π * δ_x[h,k] ) - 0.5*( X[i,k] - μ_x[h,k] )^2 / δ_x[h,k]
+            end
+            lW[i,h] += -0.5*log( 2.0π * δ_y[h] ) - 0.5*( y[i] - mean_y )^2 / δ_y[h]
+            lW[i,h] += lω[h]
+        end
+    end
+
+    return lW # lW is a n by H matrix
+end
+
 function update_alloc!(model::Model_BNP_WMReg_Joint, yX::Array{T,2}) where T <: Real
 
     lW = llik_numerator(yX, model.K, model.H,
+            model.state.μ_y, model.state.β_y, model.state.δ_y,
+            model.state.μ_x, model.state.β_x, model.state.δ_x,
+            model.state.γ, model.state.γδc, model.state.lω)
+
+    ms = maximum(lW, dims=2) # maximum across columns
+    bc_lWmimusms = broadcast(-, lW, ms)
+    W = exp.(bc_lWmimusms)
+
+    alloc_new = [ sample(StatsBase.Weights(W[i,:])) for i = 1:model.n ]
+    model.state.S = alloc_new
+
+    model.state.n_occup = length(unique(alloc_new))
+
+    return lW # for llik calculation
+end
+function update_alloc!(model::Model_BNP_WMReg_Joint, y::Array{T,1}, X::Array{T,2}) where T <: Real
+
+    lW = llik_numerator(y, X, model.K, model.H,
             model.state.μ_y, model.state.β_y, model.state.δ_y,
             model.state.μ_x, model.state.β_x, model.state.δ_x,
             model.state.γ, model.state.γδc, model.state.lω)

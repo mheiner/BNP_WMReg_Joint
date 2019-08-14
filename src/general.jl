@@ -52,7 +52,7 @@ mutable struct State_BNP_WMReg_Joint
     adapt::Bool
     adapt_iter::Union{Int, Nothing}
     adapt_thin::Union{Int, Nothing}
-    runningsum_ηlδx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix
+    runningsum_ηlδx::Union{Array{Float64, 2}, Nothing} # H by (K + K(K+1)/2) matrix (unless using Sigma_x_diag, in which case it has 2K columns)
     runningSS_ηlδx::Union{Array{Float64, 3}, Nothing}  # H by (K + K(K+1)/2) by (K + K(K+1)/2) matrix
 
     lNX::Array{Float64, 2} # n by H matrix of log(pdf(Normal(x_i))) under each obs i and allocation h
@@ -250,16 +250,21 @@ mutable struct Model_BNP_WMReg_Joint
     indx_ηx::Dict
     indx_β_x::Union{Dict, Nothing}
 
+    Σx_type::Symbol # currently one of :full and :diag
+    γ_type::Symbol # will one of :global and :local
+
     state::State_BNP_WMReg_Joint # this is the only thing that should change
 
     Model_BNP_WMReg_Joint(y, X, n, K, H, prior,
-        indx_ηy, indx_ηx, indx_β_x, state) = new(deepcopy(y), deepcopy(X), copy(n),
+        indx_ηy, indx_ηx, indx_β_x, Σx_type, γ_type, state) = new(deepcopy(y), deepcopy(X), copy(n),
         deepcopy(K), deepcopy(H), deepcopy(prior),
-        deepcopy(indx_ηy), deepcopy(indx_ηx), deepcopy(indx_β_x), deepcopy(state))
+        deepcopy(indx_ηy), deepcopy(indx_ηx), deepcopy(indx_β_x),
+        deepcopy(Σx_type), deepcopy(γ_type),
+        deepcopy(state))
 end
 
 function Model_BNP_WMReg_Joint(y::Array{Float64, 1}, X::Array{Float64, 2},
-    H::Int, prior::Prior_BNP_WMReg_Joint, state::State_BNP_WMReg_Joint)
+    H::Int, prior::Prior_BNP_WMReg_Joint, state::State_BNP_WMReg_Joint; Σx_type::Symbol=:full, γ_type::Symbol=:global)
 
     n = length(y)
     nx, K = size(X)
@@ -268,7 +273,7 @@ function Model_BNP_WMReg_Joint(y::Array{Float64, 1}, X::Array{Float64, 2},
 
     indx_ηy = Dict( :μ => 1, :β => 2:(K+1), :δ => K+2 )
 
-    if K > 1
+    if K > 1 && Σx_type == :full
         indx_ηx = Dict( :μ => 1:K, :β => (K+1):Int(K*(K+1)/2), :δ => Int(K*(K+1)/2 + 1):Int(K*(K+1)/2 + K) )
         indx_β_x = Dict()
         ii = 1
@@ -278,13 +283,22 @@ function Model_BNP_WMReg_Joint(y::Array{Float64, 1}, X::Array{Float64, 2},
             ii += jj
             jj -= 1
         end
+    elseif K > 1 && Σx_type == :diag
+        indx_ηx = Dict( :μ => 1:K, :δ => Int(K+1):Int(2*K) )
+        indx_β_x = nothing
+        state.β_x = nothing
+        state.β0_βx = nothing
+        state.Λ0_βx = nothing
+        size(state.cSig_ηlδx[1], 1) == 2*K || throw("Initialize cSig_ηlδx with correct dimensions.")
+        state.runningsum_ηlδx = zeros(Float64, H, 2*K)
+        state.runningSS_ηlδx = zeros(Float64, H, 2*K, 2*K)
     else
         indx_ηx = Dict( :μ => 1:K, :δ => Int(K+1):Int(2*K) )
         indx_β_x = nothing
     end
 
     return Model_BNP_WMReg_Joint(deepcopy(y), deepcopy(X), n, K, deepcopy(H), deepcopy(prior),
-        indx_ηy, indx_ηx, indx_β_x, deepcopy(state))
+        indx_ηy, indx_ηx, indx_β_x, Σx_type, γ_type, deepcopy(state))
 end
 
 mutable struct Monitor_BNP_WMReg_Joint
@@ -345,6 +359,39 @@ function lNXmat(x::Union{Array{T,1}, Array{T,2}},
     hcat( [ logpdf.(Normal(μ[h], sqrt(δ[h])), x) for h = 1:length(μ) ]...)
 end
 
+function lNXmat_Σdiag(X::Array{T,2}, μ::Array{T,2}, δ::Array{T,2}) where T <: Real
+    n = size(X,1)
+    H, KK = size(μ)
+    out = zeros(n, H)
+
+    for i = 1:n
+        for h = 1:H
+            for k = 1:KK
+                out[i,h] += -0.5*log( 2.0π * δ[h,k] ) - 0.5*( X[i,k] - μ[h,k] )^2 / δ[h,k]
+            end
+        end
+    end
+
+    return out
+end
+
+function lNX_Σdiag(X::Union{Array{T, 1}, Array{T, 2}}, μ::Array{T, 1}, δ::Array{T, 1}) where T <: Real
+
+    size(X,1) == length(μ) || throw("In lNX_sqfChol functions, the columns of X are the observations.")
+
+    KK, n = size(X)
+
+    out = zeros(n)
+
+    for i = 1:n
+        for k = 1:KK
+            out[i] += -0.5*log( 2.0π * δ[k] ) - 0.5*( X[k,i] - μ[k] )^2 / δ[k]
+        end
+    end
+
+    return out
+end
+
 
 function lωNXvec(lω::Array{T, 1}, lNX_mat::Array{T, 2}) where T <: Real
     lωNX_mat = broadcast(+, lω, lNX_mat') # H by n
@@ -353,14 +400,13 @@ end
 
 function reset_adapt!(model::Model_BNP_WMReg_Joint)
     model.state.adapt_iter = 0
-    ncov = Int(model.K + model.K*(model.K+1)/2)
-    model.state.runningsum_ηlδx = zeros( Float64, model.H, ncov )
-    model.state.runningSS_ηlδx = zeros( Float64, model.H, ncov, ncov )
+    model.state.runningsum_ηlδx = zeros( Float64, size(model.state.runningsum_ηlδx) )
+    model.state.runningSS_ηlδx = zeros( Float64, size(model.state.runningSS_ηlδx) )
     return nothing
 end
 
 function init_state_BNP_WMReg_Joint(n::Int, K::Int, H::Int,
-    prior::Prior_BNP_WMReg_Joint; random::Int=1, γglobal::Bool=true)
+    prior::Prior_BNP_WMReg_Joint; random::Int=1, Σx_type::Symbol=:full, γ_type::Symbol=:global)
 
     ν_δx = fill(5.0, K)
     ν_δy = 5.0
@@ -370,7 +416,7 @@ function init_state_BNP_WMReg_Joint(n::Int, K::Int, H::Int,
     # γδc = nothing
     π_γ = fill(0.25, K)
 
-    if γglobal
+    if γ_type == :global
         γ = trues(K) # always start with all variables
     else
         γ = trues(H, K)
@@ -437,7 +483,13 @@ function init_state_BNP_WMReg_Joint(n::Int, K::Int, H::Int,
         μ_y = [ rand( Normal(β0star_ηy[1], sqrt(δ_y[h]*inv(Λ0star_ηy).mat[1,1]))) for h = 1:H ]
     end
 
-    cSig_ηlδx = [ PDMat(Matrix(Diagonal(fill(0.1, Int(K+K*(K+1)/2))))) for h = 1:H ]
+    if Σx_type == :full
+        cSig_ηlδx = [ PDMat(Matrix(Diagonal(fill(0.1, Int(K+K*(K+1)/2))))) for h = 1:H ]
+    elseif Σx_type == :diag
+        cSig_ηlδx = [ PDMat(Matrix(Diagonal(fill(0.1, Int(2*K))))) for h = 1:H ]
+        β_x = nothing
+    end
+
     adapt = false
 
     State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,

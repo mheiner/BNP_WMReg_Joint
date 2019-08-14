@@ -31,12 +31,14 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
                         δγ_x = δ_x_modify_γ(sims[ii][:δ_x], sims[ii][:γ], γδc)
                         lNX = lNXmat(X_pred[:,γindx],
                                          sims[ii][:μ_x][:,γindx], δγ_x) # npred by H matrix
-                    elseif nγ > 1
+                    elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
                         βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
                                         sims[ii][:δ_x],sims[ii][:γ], γδc)
 
                         lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
                                          βγ_x, δγ_x) # npred by H matrix
+                    elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+                        lNX = lNXmat_Σdiag(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], sims[ii][:δ_x][:,γindx]) # npred by H matrix
                     end
 
                 elseif isnothing(γδc) # integration method
@@ -45,15 +47,21 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
 
                     if nγ == 0
                         lNX = zeros(Float64, npred, H)
-                    elseif nγ == 1
+                    elseif nγ == 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
                         σ2xs = [ sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx][1] for h = 1:H ]
                         lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
-                    elseif nγ > 1
+                    elseif nγ == 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+                        σ2xs = deepcopy( sims[ii][:δ_x][:,γindx] )
+                        lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
+                    elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
                         Σxs = [ PDMat( sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx] ) for h = 1:H ]
                         lNX = hcat( [ logpdf(MultivariateNormal(sims[ii][:μ_x][h,γindx], Σxs[h]), Matrix(X_pred[:,γindx]')) for h = 1:H ]... ) # n by H matrix
+                    elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+                        lNX = lNXmat_Σdiag(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], sims[ii][:δ_x][:,γindx]) # npred by H matrix
                     end
 
                 else  # variance-inflation method
+                    !isnothing(sims[ii][:β_x]) || throw("Variance-inflation variable selection not implemented for diagonal Σx.")
                     βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
                                     sims[ii][:δ_x], sims[ii][:γ], γδc)
 
@@ -66,9 +74,13 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
                 β_x = deepcopy(sims[ii][:β_x])
                 δ_x = deepcopy(sims[ii][:δ_x])
 
-                lNX = lNXmat(X_pred, sims[ii][:μ_x],
-                    [ β_x[k] for k = 1:(K-1) ],
-                    δ_x) # npred by H
+                if isnothing(β_x) # indicates Σx_type is :diag
+                    lNX = lNXmat_Σdiag(X_pred, sims[ii][:μ_x], δ_x) # npred by H
+                else # indicates Σx_type is :full
+                    lNX = lNXmat(X_pred, sims[ii][:μ_x],
+                        [ β_x[k] for k = 1:(K-1) ],
+                        δ_x) # npred by H
+                end
             end
 
             lωNX_mat = broadcast(+, sims[ii][:lω], lNX') # H by npred

@@ -69,16 +69,28 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
             end
 
             ## do last, followed by llik calculation
+
             if updatevars.S
-                llik_num_mat = update_alloc!(model, yX)
+                if model.Σx_type == :full
+                    llik_num_mat = update_alloc!(model, yX)
+                elseif model.Σx_type == :diag
+                    llik_num_mat = update_alloc!(model, model.y, model.X)
+                end
             else
-                llik_num_mat = llik_numerator(yX, model.K, model.H,
+                if model.Σx_type == :full
+                    llik_num_mat = llik_numerator(yX, model.K, model.H,
                         model.state.μ_y, model.state.β_y, model.state.δ_y,
                         model.state.μ_x, model.state.β_x, model.state.δ_x,
                         model.state.γ, model.state.γδc, model.state.lω)
+                elseif model.Σx_type == :diag
+                    llik_num_mat = llik_numerator_Σx_diag(model.y, model.X, model.K, model.H,
+                        model.state.μ_y, model.state.β_y, model.state.δ_y,
+                        model.state.μ_x, model.state.δ_x,
+                        model.state.γ, model.state.lω)
+                end
             end
-            model.state.llik = llik_BNP_WMReg_Joint(llik_num_mat, model.state.lωNX_vec)
 
+            model.state.llik = llik_BNP_WMReg_Joint(llik_num_mat, model.state.lωNX_vec)
 
             model.state.iter += 1
             if model.state.iter % report_freq == 0
@@ -130,7 +142,7 @@ function adapt!(model::Model_BNP_WMReg_Joint;
     accptr_bnds::Vector{T}=[0.23, 0.44], adjust_bnds::Vector{T}=[0.01, 10.0]) where T <: Real
 
     target = StatsBase.mean(accptr_bnds)
-    d = Int((model.K + model.K*(model.K+1)/2))
+    d = size(model.state.runningsum_ηlδx, 2)
     collect_scale = 2.38^2 / float(d)
 
     ## initial runs

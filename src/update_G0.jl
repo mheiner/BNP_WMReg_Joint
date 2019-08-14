@@ -75,7 +75,7 @@ function update_G0!(model::Model_BNP_WMReg_Joint)
                                 model.state.μ0_μx,
                                 model.prior.Λ0_μx_df, model.prior.Λ0_μx_df * model.prior.Λ0_μx_S0))
 
-    if model.K > 1
+    if model.Σx_type == :full && model.K > 1
         for k = 1:(model.K - 1)
             model.state.β0_βx[k] = BayesInference.rpost_MvN_knownPrec(
                 model.state.β_x[k][ii,:],
@@ -86,15 +86,13 @@ function update_G0!(model::Model_BNP_WMReg_Joint)
                 model.state.β_x[k][ii,:],
                 model.state.β0_βx[k],
                 model.prior.Λ0_βx_df[k], model.prior.Λ0_βx_df[k] * model.prior.Λ0_βx_S0[k]))
-
-            model.state.s0_δx[k] = rpost_IGs0_gammaPri(
-                model.state.δ_x[ii,k], model.state.ν_δx[k],
-                model.prior.s0_δx_df[k], model.prior.s0_δx_s0[k])
         end
     end
 
-    model.state.s0_δx[model.K] = rpost_IGs0_gammaPri(model.state.δ_x[ii,model.K], model.state.ν_δx[model.K],
-        model.prior.s0_δx_df[model.K], model.prior.s0_δx_s0[model.K])
+    for k = 1:model.K
+        model.state.s0_δx[k] = rpost_IGs0_gammaPri(model.state.δ_x[ii,k], model.state.ν_δx[k],
+            model.prior.s0_δx_df[k], model.prior.s0_δx_s0[k])
+    end
 
     return nothing
 end

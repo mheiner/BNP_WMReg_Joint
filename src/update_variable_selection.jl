@@ -107,11 +107,15 @@ function lNXmat_lωNXvec(model::Model_BNP_WMReg_Joint, γ::BitArray{1})
             lNX = lNXmat(model.X[:,γindx],
                          model.state.μ_x[:,γindx], model.state.δ_x[:,γindx])
             lωNX_vec = lωNXvec(model.state.lω, lNX)
-        elseif nγ > 1
+        elseif nγ > 1 && model.Σx_type == :full
             βγ_x, δγ_x = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
                                        γ, model.state.γδc)
             lNX = lNXmat(model.X[:,γindx],
                          model.state.μ_x[:,γindx], βγ_x, δγ_x) # n by H matrix
+            lωNX_vec = lωNXvec(model.state.lω, lNX)
+        elseif nγ > 1 && model.Σx_type == :diag
+            lNX = lNXmat_Σdiag(model.X[:,γindx],
+                model.state.μ_x[:,γindx], model.state.δ_x[:,γindx]) # n by H matrix
             lωNX_vec = lωNXvec(model.state.lω, lNX)
         end
 
@@ -121,26 +125,32 @@ function lNXmat_lωNXvec(model::Model_BNP_WMReg_Joint, γ::BitArray{1})
             lNX = zeros(Float64, model.n, model.H)
             lωNX_vec = zeros(Float64, model.n)
         elseif nγ == 1
-            if model.K > 1
+            if model.K > 1 && model.Σx_type == :full
                 σ2xs = [ sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ], model.state.δ_x[h,:] ).mat[γindx, γindx][1] for h = 1:model.H ]
-            else
+            elseif model.K > 1 && model.Σx_type == :diag
+                σ2xs = deepcopy(model.state.δ_x[:,γindx])
+            elseif model.K == 1
                 σ2xs = deepcopy(model.state.δ_x[:,1])
             end
             lNX = lNXmat(model.X[:,γindx], model.state.μ_x[:,γindx], σ2xs)
             lωNX_vec = lωNXvec(model.state.lω, lNX)
-        elseif nγ > 1
+        elseif nγ > 1 && model.Σx_type == :full
             Σxs = [ PDMat( sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:(model.K-1) ], model.state.δ_x[h,:] ).mat[γindx, γindx] ) for h = 1:model.H ]
             lNX = hcat( [ logpdf(MultivariateNormal(model.state.μ_x[h,γindx], Σxs[h]), Matrix(model.X[:,γindx]')) for h = 1:model.H ]... ) # n by H matrix
+            lωNX_vec = lωNXvec(model.state.lω, lNX)
+        elseif nγ > 1 && model.Σx_type == :diag
+            lNX = lNXmat_Σdiag(model.X[:,γindx],
+                model.state.μ_x[:,γindx], model.state.δ_x[:,γindx]) # n by H matrix
             lωNX_vec = lωNXvec(model.state.lω, lNX)
         end
 
     else # variance-inflation method for variable selection
 
-        if model.K > 1
+        if model.K > 1 && model.Σx_type == :full
             βγ_x, δγ_x = βδ_x_modify_γ(model.state.β_x, model.state.δ_x,
                                        γ, model.state.γδc)
             lNX = lNXmat(model.X, model.state.μ_x, βγ_x, δγ_x)
-        else
+        elseif model.K == 1 && model.Σx_type == :full
             δγ_x = δ_x_modify_γ(model.state.δ_x, γ, model.state.γδc)
             lNX = lNXmat(vec(model.X), vec(model.state.μ_x), vec(δγ_x))
         end
