@@ -211,11 +211,23 @@ end
 ## default prior spec
 function Prior_BNP_WMReg_Joint(K::Int, H::Int;
     center_y::Float64=0.0, center_X::Vector{Float64}=zeros(K),
-    range_y::Float64=6.0, range_X::Vector{Float64}=fill(6.0, K), snr::Float64=5.0) # the default 6.0 assumes data standardized
+    range_y::Float64=6.0, range_X::Vector{Float64}=fill(6.0, K), snr::Float64=5.0, 
+    Σx_type::Symbol=:full, γ_type::Symbol=:global) # the default 6.0 assumes data standardized
 
     s0_δy_s0 = (range_y/6.0)^2 / snr
 
-    Prior_BNP_WMReg_Joint(5.0, # α_sh
+    if Σx_type == :full
+        s0_δx_s0_ranXfact = 8.0
+        α_sh = 5.0
+    elseif Σx_type == :diag
+        s0_δx_s0_ranXfact = 16.0
+        α_sh = 10.0
+    end
+    
+    s0_δx_s0 = (range_X ./ s0_δx_s0_ranXfact ).^2
+
+
+    Prior_BNP_WMReg_Joint(α_sh, # α_sh
     1.0, # α_rate
     fill(0.5, K, 2), # π_sh
     vcat(center_y, zeros(K)), # β0star_ηy_mean
@@ -233,7 +245,7 @@ function Prior_BNP_WMReg_Joint(K::Int, H::Int;
     (K > 1 ? fill(10.0*(K+2), K-1) : nothing), # Λ0_βx_df
     (K > 1 ? [ PDMat(Matrix(Diagonal(fill(2.0, k)))) for k = (K-1):-1:1 ] : nothing), # Λ0_βx_S0
     fill(5.0, K), # s0_δx_df
-    (range_X ./ 8.0).^2 ) # s0_δx_s0
+    s0_δx_s0 ) # s0_δx_s0
 end
 
 
