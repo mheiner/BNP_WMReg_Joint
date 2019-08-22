@@ -263,7 +263,7 @@ mutable struct Model_BNP_WMReg_Joint
     indx_β_x::Union{Dict, Nothing}
 
     Σx_type::Symbol # currently one of :full and :diag
-    γ_type::Symbol # will one of :global and :local
+    γ_type::Symbol # will one of :global, :local, or :fixed (for no variable selection)
 
     state::State_BNP_WMReg_Joint # this is the only thing that should change
 
@@ -428,9 +428,9 @@ function init_state_BNP_WMReg_Joint(n::Int, K::Int, H::Int,
     # γδc = nothing
     π_γ = fill(0.25, K)
 
-    if γ_type == :global
+    if γ_type in (:fixed, :global)
         γ = trues(K) # always start with all variables
-    else
+    elseif γ_type == :local
         γ = trues(H, K)
     end
 

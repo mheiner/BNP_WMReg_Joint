@@ -32,7 +32,7 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
 
     ## Initialize lNX and lωNX_vec
     if model.state.iter == 0
-        if model.γ_type == :global
+        if model.γ_type in (:fixed, :global)
             model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, model.state.γ)
         elseif model.γ_type == :local
             model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, trues(model.K))
@@ -44,7 +44,7 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
     for i in 1:n_keep
         for j in 1:thin
 
-            if updatevars.γ
+            if updatevars.γ && (model.γ_type != :fixed)
                 lfc_γon = update_γ!(model)
             end
 
