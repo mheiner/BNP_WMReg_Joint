@@ -1,4 +1,4 @@
-# update_variable_selection.jl
+# update_variable_selection_global.jl
 
 export βδ_x_modify_γ, δ_x_modify_γ, lNXmat_lωNXvec;
 
@@ -86,7 +86,16 @@ function β_y_modify_γ(β_y::Array{T, 2}, γ::BitArray{1}) where T <: Real
     βout = deepcopy(β_y)
 
     for k in modify_indx # this works even if no modifications are necessary
-        βout[:,k] *= 0
+        βout[:,k] *= 0.0
+    end
+    return βout
+end
+function β_y_modify_γ(β_y::Array{T, 1}, γ::BitArray{1}) where T <: Real
+    modify_indx = findall(.!(γ))
+    βout = deepcopy(β_y)
+
+    for k in modify_indx # this works even if no modifications are necessary
+        βout[k] *= 0.0
     end
     return βout
 end
@@ -201,7 +210,7 @@ function update_γ_k!(model::Model_BNP_WMReg_Joint, lNy_old::Array{T,1}, k::Int)
     return lfc_on
 end
 
-function update_γ!(model::Model_BNP_WMReg_Joint)
+function update_γ_global!(model::Model_BNP_WMReg_Joint)
 
     ## calculate lNy
     lNy = ldens_y(model, model.state.γ)
@@ -212,6 +221,21 @@ function update_γ!(model::Model_BNP_WMReg_Joint)
     ## loop through k
     for k in up_indx
         lfc_on[k] = update_γ_k!(model, lNy, k)
+    end
+
+    return lfc_on
+end
+
+function update_γ!(model::Model_BNP_WMReg_Joint)
+
+    if model.γ_type == :global
+
+        lfc_on = update_γ_global!(model)
+
+    elseif model.γ_type == :local
+
+        lfc_on = update_γ_local!(model)
+
     end
 
     return lfc_on

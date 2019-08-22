@@ -18,7 +18,8 @@ include("update_alloc.jl")
 include("update_weights.jl")
 include("update_eta_Met.jl")
 include("update_G0.jl")
-include("update_variable_selection.jl")
+include("update_variable_selection_local.jl")
+include("update_variable_selection_global.jl")
 include("densityEstimation.jl")
 
 end

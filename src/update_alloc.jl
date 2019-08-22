@@ -7,7 +7,7 @@ function llik_numerator(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_x::Array{T, 2},
     β_x::Union{Array{Array{Float64, 2}, 1}, Nothing},
     δ_x::Array{Float64,2},
-    γ::BitArray{1}, γδc::Union{Float64, Array{T, 1}, Nothing},
+    γ::Union{BitArray{1}, BitArray{2}}, γδc::Union{Float64, Array{T, 1}, Nothing},
     lω::Array{T, 1}) where T <: Real
 
     if isnothing(β_x) && K > 1 # indicates that Σx_type == :diag
@@ -122,6 +122,99 @@ function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
     return lW # lW is a n by H matrix
 end
 
+## local variable selection
+function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
+    μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
+    μ_x::Array{T, 2},
+    β_x::Union{Array{Array{Float64, 2}, 1}, Nothing},
+    δ_x::Array{Float64,2},
+    γ::BitArray{2}, # H by K bit matrix
+    γδc::Float64, # γδc == Inf (subset method)
+    lω::Array{T, 1}) where T <: Real
+
+    γδc == Inf || throw("Subset method for variable selection requires γδc = Inf.")
+    size(yX,2) == (K+1) || throw("llik_numerator assumes a full X matrix.")
+    size(γ) == (H,K) || throw("Incorrect dimensions for γ.")
+
+    lW = zeros(Float64, size(yX,1), H)
+    lenβx = length(β_x)
+
+    # this could be done in parallel
+    for h = 1:H
+
+        γindx = findall(γ[h,:])
+        nγ = length(γindx)
+
+        if nγ == 0
+
+            lW[:,h] = lω[h] .+ logpdf.( Normal(μ_y[h], sqrt(δ_y[h])), yX[:,1] )
+
+        elseif nγ > 0
+
+            βγ_y = deepcopy(β_y[h, γindx]) # nγ length vector
+
+            if nγ > 1
+                βγ_x, δγ_x = βδ_x_h_modify_γ( [ β_x[j][h,:] for j = 1:lenβx ], δ_x[h,:], γ[h,:], γδc )
+            else
+                δγ_x = δ_x_h_modify_γ(δ_x[h,:], γ[h,:], γδc)
+            end
+
+            μγ = vcat(μ_y[h], μ_x[h,γindx])
+            βγ = ( nγ > 1 ? [βγ_y, βγ_x...] : [βγ_y] )
+            δγ = vcat(δ_y[h], δγ_x)
+
+            yXγ = yX[:,vcat(1, (γindx .+ 1))]
+
+            lW[:,h] =  lω[h] .+ lNX_sqfChol( Matrix(yXγ'), μγ, βγ, δγ )
+        end
+
+    end
+
+    return lW # lW is a n by H matrix
+end
+function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
+    μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
+    μ_x::Array{T, 2},
+    β_x::Union{Array{Array{Float64, 2}, 1}, Nothing},
+    δ_x::Array{Float64,2},
+    γ::BitArray{2}, # H by K bit matrix
+    γδc::Nothing, # γδc == nothing (integration method)
+    lω::Array{T, 1}) where T <: Real
+
+    size(yX,2) == (K+1) || throw("llik_numerator assumes a full X matrix.")
+    size(γ) == (H,K) || throw("Incorrect dimensions for γ.")
+
+    lW = zeros(Float64, size(yX,1), H)
+    lenβx = length(β_x)
+
+    # this could be done in parallel
+    for h = 1:H
+
+        γindx = findall(γ[h,:])
+        γindx_withy = vcat(1, γindx .+ 1)
+        nγ = length(γindx)
+    
+        if nγ == 0
+
+            lW[:,h] = lω[h] .+ logpdf.( Normal(μ_y[h], sqrt(δ_y[h])), yX[:,1] )
+
+        elseif nγ > 0
+
+            βγ_y = β_y_modify_γ(β_y[h,:], γ[h,:]) # length K vector
+
+            μ = vcat(μ_y[h], μ_x[h,:])
+            β = ( K > 1 ? [βγ_y, [ β_x[j][h,:] for j = 1:lenβx ]...] : [βγ_y] )
+            δ = vcat(δ_y[h], δ_x[h,:])
+
+            Σx = PDMat( sqfChol_to_Σ( β, δ ).mat[γindx_withy, γindx_withy] )
+            lW[:,h] = lω[h] .+ logpdf(MultivariateNormal(μ, Σx), Matrix(yX[:,γindx_withy]'))
+        end
+    end
+
+    return lW # lW is a n by H matrix
+end
+
+
 function llik_numerator_Σx_diag(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
     μ_x::Array{T, 2},
@@ -148,6 +241,36 @@ function llik_numerator_Σx_diag(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
 
     return lW # lW is a n by H matrix
 end
+function llik_numerator_Σx_diag(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
+    μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
+    μ_x::Array{T, 2},
+    δ_x::Array{Float64,2},
+    γ::BitArray{2}, # H by K bit matrix, compatible with both subset and integration methods
+    lω::Array{T, 1}) where T <: Real
+
+    size(γ) == (H,K) || throw("Incorrect dimensions for γ.")
+
+    n = length(y)
+    γindxes = [ findall(γ[h,:]) for h = 1:H ]
+
+    lW = zeros(Float64, n, H)
+
+    for i = 1:n
+        for h = 1:H
+            mean_y = deepcopy(μ_y[h])
+            for k in γindxes[h]
+                mean_y -= β_y[h, k] * (X[i,k] - μ_x[h, k])
+                lW[i,h] += -0.5*log( 2.0π * δ_x[h,k] ) - 0.5*( X[i,k] - μ_x[h,k] )^2 / δ_x[h,k]
+            end
+            lW[i,h] += -0.5*log( 2.0π * δ_y[h] ) - 0.5*( y[i] - mean_y )^2 / δ_y[h]
+            lW[i,h] += lω[h]
+        end
+    end
+
+    return lW # lW is a n by H matrix
+end
+
+
 
 function update_alloc!(model::Model_BNP_WMReg_Joint, yX::Array{T,2}) where T <: Real
 

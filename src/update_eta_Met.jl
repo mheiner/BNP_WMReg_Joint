@@ -40,7 +40,12 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
     lNX_mat_cand = deepcopy(model.state.lNX)
 
     ## bookkeeping for variable selection
-    γindx = findall(model.state.γ)
+    if typeof(model.state.y) == BitArray{1}
+        γ_h = deepcopy(model.state.γ)
+    elseif typeof(model.state.y) == BitArray{2}
+        γ_h = deepcopy(model.state.γ[h,:])
+    end
+    γindx = findall(γ_h)
     nγ = length(γindx)
 
     if not_auto_reject
@@ -53,7 +58,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
                 lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
             elseif nγ > 1
                 βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
-                    model.state.γ, model.state.γδc) # either variance-inflated or subset
+                    γ_h, model.state.γδc) # either variance-inflated or subset
 
                 tmp = lNX_sqfChol(Matrix(model.X[:,γindx]'),
                     μ_x_h_cand[γindx], βγ_x_h_cand, δγ_x_h_cand, false) # false means set to return nothing if not pos.def.
@@ -99,7 +104,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
             end
         else # variance-inflation method
             βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
-                model.state.γ, model.state.γδc) # either variance-inflated or subset
+                γ_h, model.state.γδc) # either variance-inflated or subset
 
             tmp = lNX_sqfChol(Matrix(model.X'), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand, false) # false means don't throw error if not PosDef
 
@@ -126,7 +131,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
                     sum(model.state.lωNX_vec)
         end
 
-            ## Decision and update
+        ## Decision and update
         if not_auto_reject && log(rand()) < lar # accept
 
             model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
@@ -145,7 +150,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
             ηlδ_x_out = deepcopy(ηlδ_x_old)
         end
 
-            ## Full conditional draw (from G0) for η_y
+        ## Full conditional draw (from G0) for η_y
 
         model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
                                         0.5 * model.state.ν_δy * model.state.s0_δy))
@@ -162,7 +167,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 
         y_h = model.y[indx_h] # doesn't need deepcopy if indexing (result of call to getindex)
         X_h = model.X[indx_h,:]
-        D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], model.state.γ)
+        D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], γ_h)
 
         Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
         β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
@@ -171,9 +176,9 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
         b1_δy_old = 0.5 * (model.state.ν_δy * model.state.s0_δy +
                                 y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
 
-            ## Important quantities for candidate
+        ## Important quantities for candidate
         if not_auto_reject
-            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
+            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, γ_h)
 
             Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
             β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
@@ -182,7 +187,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
             b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
                     y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
 
-                ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified βx and δx)
+            ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified βx and δx)
             lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
                             model.state, μ_x_h_cand, β_x_h_cand, lδ_x_h_cand,
                             Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
@@ -192,7 +197,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 
         end
 
-            ## Decision and update
+        ## Decision and update
         if not_auto_reject && log(rand()) < lar # accept
 
             model.state.μ_x[h,:] = deepcopy(μ_x_h_cand)
@@ -207,8 +212,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
             ηlδ_x_out = deepcopy(ηlδ_x_cand)
             model.state.accpt[h] += 1
 
-                ## Full conditional draw for η_y ( use prec. prameterization )
-
+            ## Full conditional draw for η_y ( use prec. prameterization )
             model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
             βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
             model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
@@ -218,8 +222,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 
             ηlδ_x_out = deepcopy(ηlδ_x_old)
 
-                ## Full conditional draw for η_y
-
+            ## Full conditional draw for η_y
             model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
             βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
             model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
@@ -265,7 +268,12 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
     lNX_mat_cand = deepcopy(model.state.lNX)
 
     ## bookkeeping for variable selection
-    γindx = findall(model.state.γ)
+    if typeof(model.state.y) == BitArray{1}
+        γ_h = deepcopy(model.state.γ)
+    elseif typeof(model.state.y) == BitArray{2}
+        γ_h = deepcopy(model.state.γ[h,:])
+    end
+    γindx = findall(γ_h)
     nγ = length(γindx)
 
     if not_auto_reject
@@ -338,12 +346,12 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 
         ## Metropolis step for η_x
 
-            ## Candidate, lNX, lωNXvec, previously computed
-            ## Important quantities
+        ## Candidate, lNX, lωNXvec, previously computed
+        ## Important quantities
 
         y_h = model.y[indx_h] # doesn't need deepcopy if indexing (result of call to getindex)
         X_h = model.X[indx_h,:]
-        D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], model.state.γ)
+        D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], γ_h)
 
         Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
         β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
@@ -354,7 +362,7 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 
         ## Important quantities for candidate
         if not_auto_reject
-            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
+            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, γ_h)
 
             Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
             β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
@@ -441,10 +449,16 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
 
     lNX_mat_cand = deepcopy(model.state.lNX)
 
+    if typeof(model.state.y) == BitArray{1}
+        γ_h = deepcopy(model.state.γ)
+    elseif typeof(model.state.y) == BitArray{2}
+        γ_h = deepcopy(model.state.γ[h,:])
+    end
+
     ## bookkeeping for variable selection
     if not_auto_reject
         if model.state.γδc == Inf || isnothing(model.state.γδc) # subset or integration method
-            if model.state.γ[1]
+            if γ_h[1]
                 lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
                 lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
             else
@@ -452,8 +466,7 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
                 lωNX_vec_cand = zeros(Float64, model.n) # n vector
             end
         else # variance-inflation method
-            δγ_x_h_cand = δ_x_h_modify_γ(δ_x_h_cand,
-            model.state.γ, model.state.γδc)
+            δγ_x_h_cand = δ_x_h_modify_γ(δ_x_h_cand, γ_h, model.state.γδc)
             lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
             lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
         end
@@ -487,7 +500,7 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
             ηlδ_x_out = deepcopy(ηlδ_x_old)
         end
 
-            ## Full conditional draw (from G0) for η_y
+        ## Full conditional draw (from G0) for η_y
 
         model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
                                         0.5 * model.state.ν_δy * model.state.s0_δy))
@@ -499,12 +512,12 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
 
         ## Metropolis step for η_x
 
-            ## Candidate, lNX, lωNXvec, previously computed
-            ## Important quantities
+        ## Candidate, lNX, lωNXvec, previously computed
+        ## Important quantities
 
         y_h = model.y[indx_h] # doesn't need to copy if indexing (result of call to getindex)
         X_h = model.X[indx_h,:]
-        D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], model.state.γ)
+        D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], γ_h)
 
         Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
         β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
@@ -515,7 +528,7 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
 
         if not_auto_reject
                 ## Important quantities for candidate
-            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, model.state.γ)
+            D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, γ_h)
 
             Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
             β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
@@ -545,7 +558,7 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
             ηlδ_x_out = deepcopy(ηlδ_x_cand)
             model.state.accpt[h] += 1
 
-                ## Full conditional draw for η_y ( use prec. prameterization )
+            ## Full conditional draw for η_y ( use prec. prameterization )
 
             model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
             βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
@@ -722,7 +735,7 @@ function βδ_x_h_modify_γ(β_x::Array{Array{T,1},1}, δ_x::Array{T,1},
     nγ = length(γindx)
     nγ > 1 || throw("βδ_x_h_modify_γ requires more than one selected variable.")
 
-    βout = [ deepcopy(β_x[γindx[k]][(γindx[(k + 1):nγ] .- γindx[k]) ])  for k = 1:(nγ - 1) ] # vector of H by (nγ-1):1 matrices
+    βout = [ deepcopy(β_x[γindx[k]][(γindx[(k + 1):nγ] .- γindx[k]) ])  for k = 1:(nγ - 1) ] # vector of (nγ-1):1 length vectors
     δout = deepcopy(δ_x[γindx]) # H nows and sum(gamma) cols
 
     return βout, δout

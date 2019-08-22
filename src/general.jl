@@ -18,7 +18,7 @@ mutable struct State_BNP_WMReg_Joint
     δ_x::Array{Float64,2}   # H by K matrix
 
     # variable selection
-    γ::Union{BitArray{1}, BitArray{2}} # K vector (for global, H by K matrix for local, which is not implemented yet)
+    γ::Union{BitArray{1}, BitArray{2}} # K vector (for global, H by K matrix for local)
     γδc::Union{Float64, Array{Float64, 1}, Nothing} # scale factors for δ_x
     π_γ::Array{Float64, 1} # K vector of probabilities that γ_k = 1 (true in code)
 
@@ -515,7 +515,7 @@ function llik_BNP_WMReg_Joint(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_x::Array{T, 2},
     β_x::Union{Array{Array{Float64, 2}, 1}, Nothing},
     δ_x::Array{Float64,2},
-    γ::BitArray{1}, γδc::Union{Float64, Array{T, 1}},
+    γ::Union{BitArray{1}, BitArray{2}}, γδc::Union{Float64, Array{T, 1}},
     lω::Array{T, 1},
     lωNX_vec::Array{T, 1}) where T <: Real
 

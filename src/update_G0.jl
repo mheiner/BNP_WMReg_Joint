@@ -67,32 +67,34 @@ function update_G0!(model::Model_BNP_WMReg_Joint)
     model.state.s0_δy = rpost_IGs0_gammaPri(model.state.δ_y[ii], model.state.ν_δy,
                                 model.prior.s0_δy_df, model.prior.s0_δy_s0)
 
-    model.state.μ0_μx = BayesInference.rpost_MvN_knownPrec(model.state.μ_x[ii,:],
-                                model.state.Λ0_μx,
-                                model.prior.μ0_μx_mean, model.prior.μ0_μx_Prec)
+    ###### the updates below appear to need all clusters because of the likelihood denominator (the above might too since we are conditioning on config variables, but it appears that they are okay)
 
-    model.state.Λ0_μx = PDMat_adj(BayesInference.rpost_MvNprec_knownMean(model.state.μ_x[ii,:],
-                                model.state.μ0_μx,
-                                model.prior.Λ0_μx_df, model.prior.Λ0_μx_df * model.prior.Λ0_μx_S0))
+    # model.state.μ0_μx = BayesInference.rpost_MvN_knownPrec(model.state.μ_x[ii,:],
+    #                             model.state.Λ0_μx,
+    #                             model.prior.μ0_μx_mean, model.prior.μ0_μx_Prec)
 
-    if model.Σx_type == :full && model.K > 1
-        for k = 1:(model.K - 1)
-            model.state.β0_βx[k] = BayesInference.rpost_MvN_knownPrec(
-                model.state.β_x[k][ii,:],
-                model.state.Λ0_βx[k],
-                model.prior.β0_βx_mean[k], model.prior.β0_βx_Prec[k])
+    # model.state.Λ0_μx = PDMat_adj(BayesInference.rpost_MvNprec_knownMean(model.state.μ_x[ii,:],
+    #                             model.state.μ0_μx,
+    #                             model.prior.Λ0_μx_df, model.prior.Λ0_μx_df * model.prior.Λ0_μx_S0))
 
-            model.state.Λ0_βx[k] = PDMat_adj(BayesInference.rpost_MvNprec_knownMean(
-                model.state.β_x[k][ii,:],
-                model.state.β0_βx[k],
-                model.prior.Λ0_βx_df[k], model.prior.Λ0_βx_df[k] * model.prior.Λ0_βx_S0[k]))
-        end
-    end
+    # if model.Σx_type == :full && model.K > 1
+    #     for k = 1:(model.K - 1)
+    #         model.state.β0_βx[k] = BayesInference.rpost_MvN_knownPrec(
+    #             model.state.β_x[k][ii,:],
+    #             model.state.Λ0_βx[k],
+    #             model.prior.β0_βx_mean[k], model.prior.β0_βx_Prec[k])
 
-    for k = 1:model.K
-        model.state.s0_δx[k] = rpost_IGs0_gammaPri(model.state.δ_x[ii,k], model.state.ν_δx[k],
-            model.prior.s0_δx_df[k], model.prior.s0_δx_s0[k])
-    end
+    #         model.state.Λ0_βx[k] = PDMat_adj(BayesInference.rpost_MvNprec_knownMean(
+    #             model.state.β_x[k][ii,:],
+    #             model.state.β0_βx[k],
+    #             model.prior.Λ0_βx_df[k], model.prior.Λ0_βx_df[k] * model.prior.Λ0_βx_S0[k]))
+    #     end
+    # end
+
+    # for k = 1:model.K
+    #     model.state.s0_δx[k] = rpost_IGs0_gammaPri(model.state.δ_x[ii,k], model.state.ν_δx[k],
+    #         model.prior.s0_δx_df[k], model.prior.s0_δx_s0[k])
+    # end
 
     return nothing
 end

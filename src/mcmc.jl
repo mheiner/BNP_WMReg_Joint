@@ -27,7 +27,8 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
     prev_accpt = deepcopy(model.state.accpt) # set every report_freq iterations
 
     yX = hcat(model.y, model.X) # useful for allocation update
-    lfc_γon = zeros(model.K)
+
+    lfc_γon = 0.0 .* model.state.γ
 
     ## Initialize lNX and lωNX_vec
     model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, model.state.γ)
@@ -113,7 +114,11 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
 
         if updatevars.γ
             # sims[i][:lwimp] = model.state.lwimp
-            sims[i][:lfc_on] = deepcopy(lfc_γon)
+            if model.γ_type == :global
+                sims[i][:lfc_on] = deepcopy(lfc_γon)
+            elseif model.γ_type == :local
+                sims[i][:γ_occupied] = sims[i][:Scounts]'model.state.γ ./ float(model.n)
+            end
         end
 
     end
