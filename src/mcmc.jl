@@ -102,7 +102,12 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
                     write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n")
                     write(report_file, "Current allocation: $(counts(model.state.S, 1:model.H))\n")
                     write(report_file, "Current final weight: $(exp(model.state.lω[model.H]))\n")
-                    write(report_file, "Current variable selection: $(1*model.state.γ)\n\n")
+                    if model.γ_type == :global
+                        write(report_file, "Current variable selection: $(1*model.state.γ)\n\n")
+                    elseif model.γ_type == :local
+                        γ_occupied = counts(model.state.S, 1:model.H)'model.state.γ ./ float(model.n)
+                        write(report_file, "Current variable selection of occupied clusters: $(γ_occupied)\n\n")
+                    end
                     close(report_file)
                 end
                 prev_accpt = deepcopy(model.state.accpt)
