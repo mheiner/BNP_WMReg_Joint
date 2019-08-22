@@ -14,6 +14,10 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
 
     K == Kx || throw(error("X_pred dimensions not aligned with simuations."))
     useγ = haskey(sims[1], :γ)
+    if useγ
+        γglobal = ( typeof(sims[1][:γ]) == BitArray{1} )
+        γlocal = ( typeof(sims[1][:γ]) == BitArray{2} )
+    end
 
     out = Array{T,3}(undef, nsim, npred, H)
 
@@ -21,53 +25,130 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
         for ii = 1:nsim
 
             if useγ
-                if γδc == Inf  # subset method
-                    γindx = findall(sims[ii][:γ])
-                    nγ = length( γindx )
 
-                    if nγ == 0
-                        lNX = zeros(Float64, npred, H)
-                    elseif nγ == 1
-                        δγ_x = δ_x_modify_γ(sims[ii][:δ_x], sims[ii][:γ], γδc)
-                        lNX = lNXmat(X_pred[:,γindx],
+                if γglobal
+
+                    if γδc == Inf  # subset method
+                        γindx = findall(sims[ii][:γ])
+                        nγ = length( γindx )
+
+                        if nγ == 0
+                            lNX = zeros(Float64, npred, H)
+                        elseif nγ == 1
+                            δγ_x = δ_x_modify_γ(sims[ii][:δ_x], sims[ii][:γ], γδc)
+                            lNX = lNXmat(X_pred[:,γindx],
                                          sims[ii][:μ_x][:,γindx], δγ_x) # npred by H matrix
-                    elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
-                        βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
+                        elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
+                            βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
                                         sims[ii][:δ_x],sims[ii][:γ], γδc)
 
-                        lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
+                            lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx],
                                          βγ_x, δγ_x) # npred by H matrix
-                    elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
-                        lNX = lNXmat_Σdiag(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], sims[ii][:δ_x][:,γindx]) # npred by H matrix
-                    end
+                        elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+                            lNX = lNXmat_Σdiag(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], sims[ii][:δ_x][:,γindx]) # npred by H matrix
+                        end
 
-                elseif isnothing(γδc) # integration method
-                    γindx = findall(sims[ii][:γ])
-                    nγ = length( γindx )
+                    elseif isnothing(γδc) # integration method
+                        γindx = findall(sims[ii][:γ])
+                        nγ = length( γindx )
 
-                    if nγ == 0
-                        lNX = zeros(Float64, npred, H)
-                    elseif nγ == 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
-                        σ2xs = [ sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx][1] for h = 1:H ]
-                        lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
-                    elseif nγ == 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
-                        σ2xs = deepcopy( sims[ii][:δ_x][:,γindx] )
-                        lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
-                    elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
-                        Σxs = [ PDMat( sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx] ) for h = 1:H ]
-                        lNX = hcat( [ logpdf(MultivariateNormal(sims[ii][:μ_x][h,γindx], Σxs[h]), Matrix(X_pred[:,γindx]')) for h = 1:H ]... ) # n by H matrix
-                    elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
-                        lNX = lNXmat_Σdiag(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], sims[ii][:δ_x][:,γindx]) # npred by H matrix
-                    end
+                        if nγ == 0
+                            lNX = zeros(Float64, npred, H)
+                        elseif nγ == 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
+                            σ2xs = [ sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx][1] for h = 1:H ]
+                            lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
+                        elseif nγ == 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+                            σ2xs = deepcopy( sims[ii][:δ_x][:,γindx] )
+                            lNX = lNXmat(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], σ2xs) # npred by H matrix
+                        elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
+                            Σxs = [ PDMat( sqfChol_to_Σ( [ sims[ii][:β_x][k][h,:] for k = 1:(K-1) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx] ) for h = 1:H ]
+                            lNX = hcat( [ logpdf(MultivariateNormal(sims[ii][:μ_x][h,γindx], Σxs[h]), Matrix(X_pred[:,γindx]')) for h = 1:H ]... ) # n by H matrix
+                        elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+                            lNX = lNXmat_Σdiag(X_pred[:,γindx], sims[ii][:μ_x][:,γindx], sims[ii][:δ_x][:,γindx]) # npred by H matrix
+                        end
 
-                else  # variance-inflation method
-                    !isnothing(sims[ii][:β_x]) || throw("Variance-inflation variable selection not implemented for diagonal Σx.")
-                    βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
+                    else  # variance-inflation method
+                        !isnothing(sims[ii][:β_x]) || throw("Variance-inflation variable selection not implemented for diagonal Σx.")
+                        βγ_x, δγ_x = βδ_x_modify_γ(sims[ii][:β_x],
                                     sims[ii][:δ_x], sims[ii][:γ], γδc)
 
-                    lNX = lNXmat(X_pred, sims[ii][:μ_x],
-                             [ βγ_x[k] for k = 1:(K-1) ],
-                             δγ_x) # npred by H
+                        lNX = lNXmat(X_pred, sims[ii][:μ_x],
+                                [ βγ_x[k] for k = 1:(K-1) ],
+                                δγ_x) # npred by H
+                    end
+
+                elseif γlocal
+
+                    if γδc == Inf  # subset method
+
+                        lNX = zeros(Float64, npred, H)
+
+                        for h = 1:H
+
+                            γ_h = sims[ii][:γ][h,:]
+                            γindx = findall(γ_h)
+                            nγ = length( γindx )
+
+                            if nγ == 0
+                                # do nothing because column h is already zeros
+                            elseif nγ == 1
+
+                                lNX[:,h] = logpdf.(Normal(sims[ii][:μ_x][h,γindx[1]], sqrt(sims[ii][:δ_x][h,γindx[1]])), vec(X_pred[:,γindx]))
+                            
+                            elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
+
+                                βγ_x_h, δγ_x_h = βδ_x_h_modify_γ( [ sims[ii][:β_x][j][h,:] for j = 1:length(sims[ii][:β_x]) ], 
+                                    sims[ii][:δ_x][h,:], γ_h, γδc) # either variance-inflated or subset
+                
+                                lNX[:,h] = lNX_sqfChol(Matrix(X_pred[:,γindx]'), sims[ii][:μ_x][h,γindx], βγ_x_h, δγ_x_h, true)
+                
+                            elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+
+                                lNX[:,h] = lNX_Σdiag( Matrix(X_pred[:,γindx]'), sims[ii][:μ_x][h,γindx], sims[ii][:δ_x][h,γindx] )
+
+                            end
+
+                        end
+
+                    elseif isnothing(γδc) # integration method
+
+                        lNX = zeros(Float64, npred, H)
+
+                        for h = 1:H
+
+                            γ_h = sims[ii][:γ][h,:]
+                            γindx = findall(γ_h)
+                            nγ = length( γindx )
+
+                            if nγ == 0
+                               # do nothing because column h is already zeros
+                            elseif nγ == 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
+
+                                σ2x = sqfChol_to_Σ( [ sims[ii][:β_x][j][h,:] for j = 1:length(sims[ii][:β_x]) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx][1]
+                                lNX[:,h] = logpdf.(Normal(sims[ii][:μ_x][h,γindx], sqrt(σ2x)), vec(X_pred[:,γindx]))
+
+                            elseif nγ == 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+
+                                σ2x = deepcopy( sims[ii][:δ_x][h,γindx] )
+                                lNX[:,h] = logpdf.(Normal(sims[ii][:μ_x][h,γindx], sqrt(σ2x)), vec(X_pred[:,γindx]))
+
+                            elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
+
+                                Σx = PDMat( sqfChol_to_Σ( [ sims[ii][:β_x][j][h,:] for j = 1:length(sims[ii][:β_x]) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx] )                
+                                lNX[:,h] = logpdf( MultivariateNormal(sims[ii][:μ_x][h,γindx], Σx), Matrix(X_pred[:,γindx]') )
+
+                            elseif nγ > 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
+
+                                lNX[:,h] = lNX_Σdiag( Matrix(X_pred[:,γindx]'), sims[ii][:μ_x][h,γindx], sims[ii][:δ_x][h,γindx] )
+
+                            end
+
+                        end
+
+                    else  # variance-inflation method
+                        throw("Variance-inflation variable selection not implemented for local variable selection.")
+                    end
+
                 end
 
             else
@@ -93,6 +174,8 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
 
             if useγ
 
+                if γglobal
+
                     if γδc == Inf || isnothing(γδc) # subset or integration method
 
                         if sims[ii][:γ][1]
@@ -107,6 +190,29 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
                         lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(δγ_x))
 
                     end
+
+                elseif γlocal
+
+                    if γδc == Inf || isnothing(γδc) # subset or integration method
+
+                        lNX = zeros(Float64, npred, H)
+
+                        for h = 1:H
+
+                            if sims[ii][:γ][h,1]
+                                σ2x = deepcopy(sims[ii][:δ_x][h,1])
+                                lNX[:,h] = logpdf.( Normal(sims[ii][:μ_x][h,1], sqrt(σ2x)), vec(X_pred) )
+                            else
+                                # do nothing, the column is already zeros
+                            end
+
+                        end
+
+                    else  # variance-inflation method
+                        throw("Variance-inflation variable selection not implemented for local variable selection.")
+                    end
+
+                end
 
             else
                 lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(sims[ii][:δ_x])) # npred by H
@@ -146,12 +252,20 @@ function getEy(X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Union{Array{Dict{Sy
     K == K3 || throw(error("Dimension mismatch."))
 
     useγ = haskey(sims[1], :γ)
+    if useγ
+        γglobal = ( typeof(sims[1][:γ]) == BitArray{1} )
+        γlocal = ( typeof(sims[1][:γ]) == BitArray{2} )
+    end
 
     out = zeros(T, nsim, npred)
 
     for ii = 1:nsim
         if useγ
-            βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+            if γglobal
+                βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+            elseif γlocal
+                βγ_y = sims[ii][:β_y] .* sims[ii][:γ]
+            end
         else
             βγ_y = deepcopy(sims[ii][:β_y])
         end
@@ -214,12 +328,20 @@ function getQuant(q::Float64, X_pred::Array{T,2}, dw_mat::Array{T,3}, sims::Unio
     K == K3 || throw(error("Dimension mismatch."))
 
     useγ = haskey(sims[1], :γ)
+    if useγ
+        γglobal = ( typeof(sims[1][:γ]) == BitArray{1} )
+        γlocal = ( typeof(sims[1][:γ]) == BitArray{2} )
+    end
 
     out = zeros(T, nsim, npred)
 
     for ii = 1:nsim
         if useγ
-            βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+            if γglobal
+                βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+            elseif γlocal
+                βγ_y = sims[ii][:β_y] .* sims[ii][:γ]
+            end
         else
             βγ_y = deepcopy(sims[ii][:β_y])
         end
@@ -285,13 +407,21 @@ function getlogdens_EY(X_pred::Array{T,2}, y_grid::Array{T,1},
     K == K3 || throw(error("Dimension mismatch."))
 
     useγ = haskey(sims[1], :γ)
+    if useγ
+        γglobal = ( typeof(sims[1][:γ]) == BitArray{1} )
+        γlocal = ( typeof(sims[1][:γ]) == BitArray{2} )
+    end
 
     ldens0 = Array{T,4}(undef, (nsim, npred, ngrid, H))
     Ey = zeros(T, nsim, npred)
 
     for ii = 1:nsim
         if useγ
-            βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+            if γglobal
+                βγ_y = β_y_modify_γ(sims[ii][:β_y], sims[ii][:γ])
+            elseif γlocal
+                βγ_y = sims[ii][:β_y] .* sims[ii][:γ]
+            end
         else
             βγ_y = deepcopy(sims[ii][:β_y])
         end

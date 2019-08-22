@@ -129,7 +129,7 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
             if model.γ_type == :global
                 sims[i][:lfc_on] = deepcopy(lfc_γon)
             elseif model.γ_type == :local
-                sims[i][:γ_occupied] = sims[i][:Scounts]'model.state.γ ./ float(model.n)
+                sims[i][:γ_occupied] = vec(sims[i][:Scounts]'model.state.γ ./ float(model.n))
             end
         end
 
