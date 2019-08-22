@@ -23,7 +23,7 @@ end
 ## Calculate lNX and lωNXvec under different variable selection methods
 function lNXmat_lωNXvec_h(model::Model_BNP_WMReg_Joint, γ_h::BitArray{1}, h::Int)
 
-    lNX = deepcopy(model.lNX)
+    lNX = deepcopy(model.state.lNX)
     
     γindx = findall(γ_h)
     nγ = length(γindx)
@@ -94,6 +94,15 @@ function lNXmat_lωNXvec_h(model::Model_BNP_WMReg_Joint, γ_h::BitArray{1}, h::I
 end
 
 
+function lNXmat_lωNXvec!(model::Model_BNP_WMReg_Joint, γ::BitArray{2})
+
+    for h = 1:model.H
+        model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec_h(model, γ[h,:], h)
+    end
+
+    return nothing
+end
+
 
 function update_γ_hk!(model::Model_BNP_WMReg_Joint, lNy_h_old::Array{T,1}, h::Int, k::Int) where T <: Real
 
@@ -143,7 +152,7 @@ function update_γ_local!(model::Model_BNP_WMReg_Joint)
     for h = 1:model.H
 
         ## calculate lNy
-        lNy_h = ldens_y_h(model, model.state.γ, h)
+        lNy_h = ldens_y_h(model, model.state.γ[h,:], h)
 
         up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
         

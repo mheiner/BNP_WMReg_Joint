@@ -40,9 +40,9 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
     lNX_mat_cand = deepcopy(model.state.lNX)
 
     ## bookkeeping for variable selection
-    if typeof(model.state.y) == BitArray{1}
+    if typeof(model.state.γ) == BitArray{1}
         γ_h = deepcopy(model.state.γ)
-    elseif typeof(model.state.y) == BitArray{2}
+    elseif typeof(model.state.γ) == BitArray{2}
         γ_h = deepcopy(model.state.γ[h,:])
     end
     γindx = findall(γ_h)
@@ -268,9 +268,9 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
     lNX_mat_cand = deepcopy(model.state.lNX)
 
     ## bookkeeping for variable selection
-    if typeof(model.state.y) == BitArray{1}
+    if typeof(model.state.γ) == BitArray{1}
         γ_h = deepcopy(model.state.γ)
-    elseif typeof(model.state.y) == BitArray{2}
+    elseif typeof(model.state.γ) == BitArray{2}
         γ_h = deepcopy(model.state.γ[h,:])
     end
     γindx = findall(γ_h)
@@ -449,9 +449,9 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
 
     lNX_mat_cand = deepcopy(model.state.lNX)
 
-    if typeof(model.state.y) == BitArray{1}
+    if typeof(model.state.γ) == BitArray{1}
         γ_h = deepcopy(model.state.γ)
-    elseif typeof(model.state.y) == BitArray{2}
+    elseif typeof(model.state.γ) == BitArray{2}
         γ_h = deepcopy(model.state.γ[h,:])
     end
 

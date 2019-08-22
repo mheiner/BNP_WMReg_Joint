@@ -31,7 +31,14 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
     lfc_γon = 0.0 .* model.state.γ
 
     ## Initialize lNX and lωNX_vec
-    model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, model.state.γ)
+    if model.state.iter == 0
+        if model.γ_type == :global
+            model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, model.state.γ)
+        elseif model.γ_type == :local
+            model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, trues(model.K))
+            lNXmat_lωNXvec!(model, model.state.γ)
+        end
+    end
 
     ## sampling
     for i in 1:n_keep
