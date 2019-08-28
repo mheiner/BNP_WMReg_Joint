@@ -149,12 +149,12 @@ function update_γ_local!(model::Model_BNP_WMReg_Joint)
 
     lfc_on = zeros(Float64, model.H, model.K)
 
+    up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
+
     for h = 1:model.H
 
         ## calculate lNy
         lNy_h = ldens_y_h(model, model.state.γ[h,:], h)
-
-        up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
         
         ## loop through k
         for k in up_indx
@@ -165,3 +165,57 @@ function update_γ_local!(model::Model_BNP_WMReg_Joint)
 
     return lfc_on
 end
+
+function update_π_γ!(model::Model_BNP_WMReg_Joint)
+
+    for k = 1:model.K
+
+        if model.state.ξ[k]
+
+            nn = sum( model.state.γ[:,k] )
+            aa = model.prior.π_sh[k,1] + nn
+            bb = model.prior.π_sh[k,2] + model.H - nn
+
+            model.state.π_γ[k] = rand( Beta( aa , bb ) )
+
+        else
+
+            model.state.π_γ[k] = 0.0
+
+        end
+
+    end
+
+    return nothing
+end
+
+function update_ξ!(model::Model_BNP_WMReg_Joint) # full conditional probabilities could be pre-computed
+
+    for k = 1:model.K
+
+        nn = sum( model.state.γ[:,k] )
+
+        if nn > 0
+
+            model.state.ξ[k] = true
+
+        else
+
+            laa0 = lgamma( model.prior.π_sh[k,2] + model.H ) + lgamma( model.prior.π_sh[k,1] + model.prior.π_sh[k,2] ) - 
+                lgamma( model.prior.π_sh[k,2] ) - lgamma( model.prior.π_sh[k,1] + model.prior.π_sh[k,2] + model.H )
+            aa0 = exp(laa0)
+
+            aa = model.prior.π_ξ * aa0
+            p1 = aa / ( aa + 1.0 - model.prior.π_ξ )
+
+            model.state.ξ[k] = rand() < p1
+
+        end
+
+    end
+
+    return nothing
+end
+
+
+

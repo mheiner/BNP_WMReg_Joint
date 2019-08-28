@@ -45,6 +45,12 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
         for j in 1:thin
 
             if updatevars.γ && (model.γ_type != :fixed)
+
+                if model.γ_type == :local
+                    update_ξ!(model)
+                    update_π_γ!(model)
+                end
+
                 lfc_γon = update_γ!(model)
             end
 

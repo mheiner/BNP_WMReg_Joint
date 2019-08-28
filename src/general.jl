@@ -21,6 +21,7 @@ mutable struct State_BNP_WMReg_Joint
     γ::Union{BitArray{1}, BitArray{2}} # K vector (for global, H by K matrix for local)
     γδc::Union{Float64, Array{Float64, 1}, Nothing} # scale factors for δ_x
     π_γ::Array{Float64, 1} # K vector of probabilities that γ_k = 1 (true in code)
+    ξ::BitArray{1} # mixture indicator for pi_gamma
 
     # allocation states, weights
     S::Array{Int, 1}        # n vector
@@ -58,8 +59,6 @@ mutable struct State_BNP_WMReg_Joint
     lNX::Array{Float64, 2} # n by H matrix of log(pdf(Normal(x_i))) under each obs i and allocation h
     lωNX_vec::Array{Float64, 1} # n vector with log( sum_j ωN(x_i) )
 
-    lwimp::Float64 # log of importance weight for the current iteration (for tempered Gibbs sampling γ; deprecated)
-
     n_occup::Int
     llik::Float64
 
@@ -67,46 +66,46 @@ end
 
 ### Outer constructors for State_BNP_WMReg_Joint
 ## for coninuing an adapt phase
-function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ, ξ,
     S, lω::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
-    adapt, adapt_iter, adapt_thin, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
+    adapt, adapt_iter, adapt_thin, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, llik)
 
     State_BNP_WMReg_Joint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
-        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ), deepcopy(ξ),
         deepcopy(S), deepcopy(lω), lω_to_v(lω), α, deepcopy(β0star_ηy),
         deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
         adapt, adapt_iter, adapt_thin, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
-        deepcopy(lNX), deepcopy(lωNX_vec), lwimp, length(unique(S)), llik)
+        deepcopy(lNX), deepcopy(lωNX_vec), length(unique(S)), llik)
 end
 ## same but includes v
-function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ, ξ,
     S, lω::Vector{Float64}, v::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx,
-    adapt, adapt_iter, adapt_thin, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, lwimp, llik)
+    adapt, adapt_iter, adapt_thin, runningsum_ηlδx, runningSS_ηlδx, lNX, lωNX_vec, llik)
 
     State_BNP_WMReg_Joint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
-        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ), deepcopy(ξ),
         deepcopy(S), deepcopy(lω), v, α, deepcopy(β0star_ηy),
         deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
         adapt, adapt_iter, adapt_thin, deepcopy(runningsum_ηlδx), deepcopy(runningSS_ηlδx),
-        deepcopy(lNX), deepcopy(lωNX_vec), lwimp, length(unique(S)), llik)
+        deepcopy(lNX), deepcopy(lωNX_vec), length(unique(S)), llik)
 end
 
 ## for starting new
-function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ, ξ,
     S, lω::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     cSig_ηlδx, adapt)
 
     State_BNP_WMReg_Joint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
-        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ), deepcopy(ξ),
         deepcopy(S), deepcopy(lω), lω_to_v(lω), α, deepcopy(β0star_ηy), deepcopy(Λ0star_ηy),
         ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
@@ -115,18 +114,18 @@ function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
-        zeros(Float64, 1, 1), zeros(Float64, 1), 0.0,
+        zeros(Float64, 1, 1), zeros(Float64, 1),
         length(unique(S)), 0.0 )
 end
 
 ## for starting new ( given a value of v )
-function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ, ξ,
     S, lω::Vector{Float64}, v::Vector{Float64}, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     cSig_ηlδx, adapt)
 
     State_BNP_WMReg_Joint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
-        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ), deepcopy(ξ),
         deepcopy(S), deepcopy(lω), deepcopy(v), α, deepcopy(β0star_ηy), deepcopy(Λ0star_ηy),
         ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
@@ -135,24 +134,24 @@ function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
         zeros( Float64, length(lω), Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2),
                         Int(length(μ0_μx) + length(μ0_μx)*(length(μ0_μx)+1)/2) ),
-        zeros(Float64, 1, 1), zeros(Float64, 1), 0.0,
+        zeros(Float64, 1, 1), zeros(Float64, 1),
         length(unique(S)), 0.0 )
 end
 
 ## for starting new but not adapting
-function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+function State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ, ξ,
     S, lω::Vector{Float64}, α::Float64, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
     β0_βx, Λ0_βx, ν_δx, s0_δx,
     iter, accpt, cSig_ηlδx)
 
     State_BNP_WMReg_Joint(deepcopy(μ_y), deepcopy(β_y), deepcopy(δ_y), deepcopy(μ_x),
-        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ),
+        deepcopy(β_x), deepcopy(δ_x), deepcopy(γ), deepcopy(γδc), deepcopy(π_γ), deepcopy(ξ),
         deepcopy(S), deepcopy(lω), lω_to_v(lω), α, deepcopy(β0star_ηy),
         deepcopy(Λ0star_ηy), ν_δy, s0_δy, deepcopy(μ0_μx), deepcopy(Λ0_μx),
         deepcopy(β0_βx), deepcopy(Λ0_βx), deepcopy(ν_δx), deepcopy(s0_δx),
         iter, accpt, deepcopy(cSig_ηlδx),
         false, nothing, nothing, nothing, nothing,
-        zeros(Float64, 1, 1), zeros(Float64, 1), 0.0,
+        zeros(Float64, 1, 1), zeros(Float64, 1),
         length(unique(S)), 0.0)
 end
 
@@ -161,6 +160,7 @@ mutable struct Prior_BNP_WMReg_Joint
     α_rate::Float64 # gamma rate
 
     π_sh::Array{Float64, 2} # Beta shape parameters
+    π_ξ::Float64 # Mixture probability that pi_gamma comes from a beta (instead of point mass at 0)
 
     β0star_ηy_mean::Array{Float64, 1}   # MVN mean vector
     β0star_ηy_Cov::PDMat{Float64}       # MVN covariance matrix
@@ -192,13 +192,14 @@ end
 
 ### Outer constructors for Prior_BNP_WMReg_Joint
 ## automatic creation of precision matrices from covariance matrices
-function Prior_BNP_WMReg_Joint(α_sh, α_rate, π_sh, β0star_ηy_mean, β0star_ηy_Cov,
+function Prior_BNP_WMReg_Joint(α_sh, α_rate, π_sh, π_ξ, β0star_ηy_mean, β0star_ηy_Cov,
     Λ0star_ηy_df, Λ0star_ηy_S0, s0_δy_df, s0_δy_s0,
     μ0_μx_mean, μ0_μx_Cov, Λ0_μx_df, Λ0_μx_S0,
     β0_βx_mean, β0_βx_Cov, Λ0_βx_df, Λ0_βx_S0,
     s0_δx_df, s0_δx_s0)
 
-    Prior_BNP_WMReg_Joint(α_sh, α_rate, deepcopy(π_sh), deepcopy(β0star_ηy_mean),
+    Prior_BNP_WMReg_Joint(α_sh, α_rate, deepcopy(π_sh), deepcopy(π_ξ),
+        deepcopy(β0star_ηy_mean),
         deepcopy(β0star_ηy_Cov), inv(β0star_ηy_Cov),
         deepcopy(Λ0star_ηy_df), deepcopy(Λ0star_ηy_S0), s0_δy_df, s0_δy_s0,
         deepcopy(μ0_μx_mean), deepcopy(μ0_μx_Cov), inv(μ0_μx_Cov), Λ0_μx_df,
@@ -230,6 +231,7 @@ function Prior_BNP_WMReg_Joint(K::Int, H::Int;
     Prior_BNP_WMReg_Joint(α_sh, # α_sh
     1.0, # α_rate
     fill(0.5, K, 2), # π_sh
+    0.25, # π_ξ
     vcat(center_y, zeros(K)), # β0star_ηy_mean
     PDMat(Matrix(Diagonal(vcat((range_y/6.0)^2, fill(1.0, K))))), # β0star_ηy_Cov
     50.0*(K+1+2), # Λ0star_ηy_df # was multiplied by 100...
@@ -338,7 +340,7 @@ function postSimsInit_BNP_WMReg_Joint(m::Monitor_BNP_WMReg_Joint, n_keep::Int, i
     end
 
     if m.γ
-        push!(symb, [:γ, :π_γ]...)
+        push!(symb, [:γ, :π_γ, :ξ]...)
     end
 
     if m.S
@@ -427,6 +429,7 @@ function init_state_BNP_WMReg_Joint(n::Int, K::Int, H::Int,
     # γδc = fill(1.0e6, K)
     # γδc = nothing
     π_γ = fill(0.25, K)
+    ξ = trues(K)
 
     if γ_type in (:fixed, :global)
         γ = trues(K) # always start with all variables
@@ -504,7 +507,7 @@ function init_state_BNP_WMReg_Joint(n::Int, K::Int, H::Int,
 
     adapt = false
 
-    State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ,
+    State_BNP_WMReg_Joint(μ_y, β_y, δ_y, μ_x, β_x, δ_x, γ, γδc, π_γ, ξ,
         S, lω, v, α, β0star_ηy, Λ0star_ηy, ν_δy, s0_δy, μ0_μx, Λ0_μx,
         β0_βx, Λ0_βx, ν_δx, s0_δx,
         cSig_ηlδx, adapt)
