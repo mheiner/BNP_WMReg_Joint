@@ -51,7 +51,8 @@ function rpost_IGs0_gammaPri(δ::Array{T,1}, ν::T, n0::T, s00::T) where T <: Re
 end
 
 function update_G0!(model::Model_BNP_WMReg_Joint)
-    ii = sort(unique(model.state.S))
+    # ii = sort(unique(model.state.S)) # this may be the source of some numerical instabilities
+    ii = 1:model.H
 
     βstar_ηy = hcat(model.state.μ_y[ii], model.state.β_y[ii,:])
 
