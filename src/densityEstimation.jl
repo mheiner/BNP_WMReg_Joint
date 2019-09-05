@@ -164,10 +164,10 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
                 end
             end
 
-            lωNX_mat = broadcast(+, sims[ii][:lω], lNX') # H by npred
-            lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 1) ) # npred vec
+            lωNX_mat = broadcast(+, permutedims(sims[ii][:lω]), lNX) # npred by H
+            lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 2) ) # npred vec
 
-            out[ii,:,:] = broadcast(-, lωNX_mat', lωNX_vec) # normalized, npred by H
+            out[ii,:,:] = broadcast(-, lωNX_mat, lωNX_vec) # normalized, npred by H
         end
     else  # K = 1
         for ii = 1:nsim
@@ -218,10 +218,10 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
                 lNX = lNXmat(vec(X_pred), vec(sims[ii][:μ_x]), vec(sims[ii][:δ_x])) # npred by H
             end
 
-            lωNX_mat = broadcast(+, sims[ii][:lω], lNX') # H by npred
-            lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 1) ) # npred vec
+            lωNX_mat = broadcast(+, permutedims(sims[ii][:lω]), lNX) # npred by H
+            lωNX_vec = vec( BayesInference.logsumexp(lωNX_mat, 2) ) # npred vec
 
-            out[ii,:,:] = broadcast(-, lωNX_mat', lωNX_vec) # normalized, npred by H
+            out[ii,:,:] = broadcast(-, lωNX_mat, lωNX_vec) # normalized, npred by H
         end
     end
 

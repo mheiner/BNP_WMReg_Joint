@@ -593,12 +593,12 @@ end
 
 
 function construct_Dh(h::Int, Xh::Array{T,2}, μ_x_h::Array{T,1}) where T <: Real
-    D0 = broadcast(-, μ_x_h, Xh')'
+    D0 = broadcast(-, permutedims(μ_x_h), Xh)
     return hcat(ones(size(Xh, 1)), D0)
 end
 function construct_Dh(h::Int, Xh::Array{T,2}, μ_x_h::Array{T,1},
                       γ::BitArray{1}) where T <: Real
-    D0 = broadcast(-, μ_x_h, Xh')'
+    D0 = broadcast(-, permutedims(μ_x_h), Xh)
     D0[:, findall(.!(γ))] *= 0.0
     return hcat(ones(size(Xh, 1)), D0)
 end

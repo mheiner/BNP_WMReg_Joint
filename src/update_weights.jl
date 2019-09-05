@@ -48,8 +48,8 @@ function lfc_v(v::Array{T, 1}, a_v::Array{T, 1}, b_v::Array{T, 1},
     lωNX_vec = lωNXvec(lω, lNX_mat)
 
     ## replaced by lωXvec
-    # lωNX_mat = broadcast(+, lω, lNX_mat') # H by n
-    # lωNX_vec = BayesInference.logsumexp(lωNX_mat, 1) # n vector
+    # lωNX_mat = broadcast(+, permutedims(lω), lNX_mat) # n by H
+    # lωNX_vec = BayesInference.logsumexp(lωNX_mat, 2) # n vector
 
     ldb = [ logpdf( Beta(a_v[h], b_v[h]), v[h] ) for h = 1:length(v) ]
 

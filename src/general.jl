@@ -408,8 +408,8 @@ end
 
 
 function lωNXvec(lω::Array{T, 1}, lNX_mat::Array{T, 2}) where T <: Real
-    lωNX_mat = broadcast(+, lω, lNX_mat') # H by n
-    vec( BayesInference.logsumexp(lωNX_mat, 1) ) # n vector
+    lωNX_mat = broadcast(+, permutedims(lω), lNX_mat) # n by H
+    vec( BayesInference.logsumexp(lωNX_mat, 2) ) # n vector
 end
 
 function reset_adapt!(model::Model_BNP_WMReg_Joint)
@@ -513,6 +513,11 @@ function init_state_BNP_WMReg_Joint(n::Int, K::Int, H::Int,
         cSig_ηlδx, adapt)
 end
 
+
+function llik_BNP_WMReg_Joint(model::Model_BNP_WMReg_Joint)
+    llik_num_mat = llik_numerator(model)
+    return llik_BNP_WMReg_Joint(llik_num_mat, model.state.lωNX_vec)
+end
 function llik_BNP_WMReg_Joint(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
     μ_x::Array{T, 2},

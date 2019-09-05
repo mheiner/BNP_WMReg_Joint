@@ -2,6 +2,51 @@
 
 export llik_numerator, llik_numerator_Σx_diag;
 
+function lNymat(model::Model_BNP_WMReg_Joint)
+
+    out = zeros(Float64, model.n, model.H)
+
+    if model.γ_type in (:fixed, :global)
+        γ_indx = findall(model.state.γ)
+    end
+
+    for h = 1:model.H
+
+        if model.γ_type == :local
+            γ_indx = findall(model.state.γ[h,:])
+        end
+
+        σ2 = deepcopy(model.state.δ_y[h])
+        aa = -0.5 * log( 2.0π * σ2 )
+
+        for i = 1:model.n
+
+            μ = deepcopy(model.state.μ_y[h])
+
+            for k in γ_indx
+                μ -= model.state.β_y[h, k] * (model.X[i,k] - model.state.μ_x[h, k])
+            end
+
+            out[i,h] = aa - 0.5*( model.y[i] - μ )^2 / σ2
+
+        end
+    end
+
+    return out
+end
+
+function llik_numerator(model::Model_BNP_WMReg_Joint)
+
+    lNy = lNymat(model)
+    size(lNy) == size(model.state.lNX) == (model.n, model.H) || throw("lNy and lNX dimension mismatch. lNy: $(size(lNy)) and lNX: $(size(model.state.lNX))")
+
+    ldens_num = lNy .+ model.state.lNX
+    lW = broadcast(+, permutedims(model.state.lω), ldens_num)
+
+    return lW # n by H matrix
+end
+
+## The alternates below are deprecated, but may be useful sometime?
 function llik_numerator(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     μ_y::Array{T, 1}, β_y::Array{T, 2}, δ_y::Array{T, 1},
     μ_x::Array{T, 2},
@@ -271,7 +316,22 @@ function llik_numerator_Σx_diag(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
 end
 
 
+function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
 
+    lW = llik_numerator(model)
+
+    ms = maximum(lW, dims=2) # maximum across columns
+    bc_lWmimusms = broadcast(-, lW, ms)
+    W = exp.(bc_lWmimusms)
+
+    alloc_new = [ sample(StatsBase.Weights(W[i,:])) for i = 1:model.n ]
+    model.state.S = deepcopy(alloc_new)
+
+    model.state.n_occup = length(unique(alloc_new))
+
+    return lW # for llik calculation
+end
+## The alternates below are deprecated, but may be useful sometime?
 function update_alloc!(model::Model_BNP_WMReg_Joint, yX::Array{T,2}) where T <: Real
 
     lW = llik_numerator(yX, model.K, model.H,
@@ -284,7 +344,7 @@ function update_alloc!(model::Model_BNP_WMReg_Joint, yX::Array{T,2}) where T <: 
     W = exp.(bc_lWmimusms)
 
     alloc_new = [ sample(StatsBase.Weights(W[i,:])) for i = 1:model.n ]
-    model.state.S = alloc_new
+    model.state.S = deepcopy(alloc_new)
 
     model.state.n_occup = length(unique(alloc_new))
 
@@ -302,7 +362,7 @@ function update_alloc!(model::Model_BNP_WMReg_Joint, y::Array{T,1}, X::Array{T,2
     W = exp.(bc_lWmimusms)
 
     alloc_new = [ sample(StatsBase.Weights(W[i,:])) for i = 1:model.n ]
-    model.state.S = alloc_new
+    model.state.S = deepcopy(alloc_new)
 
     model.state.n_occup = length(unique(alloc_new))
 

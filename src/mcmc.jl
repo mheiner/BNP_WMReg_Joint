@@ -36,7 +36,7 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
             model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, model.state.γ)
         elseif model.γ_type == :local
             model.state.lNX, model.state.lωNX_vec = lNXmat_lωNXvec(model, trues(model.K))
-            lNXmat_lωNXvec!(model, model.state.γ)
+            lNXmat_lωNXvec!(model, model.state.γ) # update each mixture component h in 1:H
         end
     end
 
@@ -85,23 +85,9 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
             ## do last, followed by llik calculation
 
             if updatevars.S
-                if model.Σx_type == :full
-                    llik_num_mat = update_alloc!(model, yX)
-                elseif model.Σx_type == :diag
-                    llik_num_mat = update_alloc!(model, model.y, model.X)
-                end
+                llik_num_mat = update_alloc!(model)
             else
-                if model.Σx_type == :full
-                    llik_num_mat = llik_numerator(yX, model.K, model.H,
-                        model.state.μ_y, model.state.β_y, model.state.δ_y,
-                        model.state.μ_x, model.state.β_x, model.state.δ_x,
-                        model.state.γ, model.state.γδc, model.state.lω)
-                elseif model.Σx_type == :diag
-                    llik_num_mat = llik_numerator_Σx_diag(model.y, model.X, model.K, model.H,
-                        model.state.μ_y, model.state.β_y, model.state.δ_y,
-                        model.state.μ_x, model.state.δ_x,
-                        model.state.γ, model.state.lω)
-                end
+                llik_num_mat = llik_numerator(model)
             end
 
             model.state.llik = llik_BNP_WMReg_Joint(llik_num_mat, model.state.lωNX_vec)

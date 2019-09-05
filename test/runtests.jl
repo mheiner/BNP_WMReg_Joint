@@ -56,6 +56,8 @@ ones(K), # s0_δx
 true # adapt
 )
 
+# several fuctions require this broadcasting behavior
+broadcast(+, permutedims([1.0, 2.0]), zeros(3,2)) ≈ [1.0 2.0; 1.0 2.0; 1.0 2.0]
 
 model = Model_DPmRegJoint(y, # y,
 X, # X,
