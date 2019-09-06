@@ -54,19 +54,19 @@ function update_G0!(model::Model_BNP_WMReg_Joint)
     # ii = sort(unique(model.state.S)) # this may be the source of some numerical instabilities
     ii = 1:model.H
 
-    βstar_ηy = hcat(model.state.μ_y[ii], model.state.β_y[ii,:])
+    # βstar_ηy = hcat(model.state.μ_y[ii], model.state.β_y[ii,:])
 
-    model.state.β0star_ηy = rpost_β0star_ηy(βstar_ηy,
-            model.state.δ_y[ii], model.state.Λ0star_ηy,
-            model.prior.β0star_ηy_mean, model.prior.β0star_ηy_Prec)
+    # model.state.β0star_ηy = rpost_β0star_ηy(βstar_ηy,
+    #         model.state.δ_y[ii], model.state.Λ0star_ηy,
+    #         model.prior.β0star_ηy_mean, model.prior.β0star_ηy_Prec)
 
-    model.state.Λ0star_ηy = rpost_Λ0star_ηy(βstar_ηy, model.state.δ_y[ii],
-                                     model.state.β0star_ηy,
-                                     model.prior.Λ0star_ηy_df,
-                                     model.prior.Λ0star_ηy_df * model.prior.Λ0star_ηy_S0)
+    # model.state.Λ0star_ηy = rpost_Λ0star_ηy(βstar_ηy, model.state.δ_y[ii],
+    #                                  model.state.β0star_ηy,
+    #                                  model.prior.Λ0star_ηy_df,
+    #                                  model.prior.Λ0star_ηy_df * model.prior.Λ0star_ηy_S0)
 
-    model.state.s0_δy = rpost_IGs0_gammaPri(model.state.δ_y[ii], model.state.ν_δy,
-                                model.prior.s0_δy_df, model.prior.s0_δy_s0)
+    # model.state.s0_δy = rpost_IGs0_gammaPri(model.state.δ_y[ii], model.state.ν_δy,
+    #                             model.prior.s0_δy_df, model.prior.s0_δy_s0)
 
     ###### the updates below appear to need all clusters because of the likelihood denominator (the above might too since we are conditioning on config variables, but it appears that they are okay)
 
