@@ -160,7 +160,7 @@ mutable struct Prior_BNP_WMReg_Joint
     α_rate::Float64 # gamma rate
 
     π_sh::Array{Float64, 2} # Beta shape parameters
-    π_ξ::Float64 # Mixture probability that pi_gamma comes from a beta (instead of point mass at 0)
+    π_ξ::Union{Float64, Array{Float64, 1}} # Mixture probability that pi_gamma comes from a beta (instead of point mass at 0)
 
     β0star_ηy_mean::Array{Float64, 1}   # MVN mean vector
     β0star_ηy_Cov::PDMat{Float64}       # MVN covariance matrix
@@ -230,8 +230,8 @@ function Prior_BNP_WMReg_Joint(K::Int, H::Int;
 
     Prior_BNP_WMReg_Joint(α_sh, # α_sh
     1.0, # α_rate
-    fill(0.5, K, 2), # π_sh
-    0.25, # π_ξ
+    hcat(fill(1.0, K), fill(0.5, K)), # π_sh
+    fill(0.25, K), # π_ξ
     vcat(center_y, zeros(K)), # β0star_ηy_mean
     PDMat(Matrix(Diagonal(vcat((range_y/6.0)^2, fill(1.0, K))))), # β0star_ηy_Cov
     50.0*(K+1+2), # Λ0star_ηy_df # was multiplied by 100...

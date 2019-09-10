@@ -191,6 +191,12 @@ end
 
 function update_ξ!(model::Model_BNP_WMReg_Joint) # full conditional probabilities could be pre-computed
 
+    if typeof(model.prior.π_ξ) == Float64
+        π_ξ = fill(model.prior.π_ξ, model.K)
+    elseif typeof(model.prior.π_ξ) == Array{Float64, 1}
+        π_ξ = deepcopy(model.prior.π_ξ)
+    end
+
     for k = 1:model.K
 
         nn = sum( model.state.γ[:,k] )
@@ -205,8 +211,8 @@ function update_ξ!(model::Model_BNP_WMReg_Joint) # full conditional probabiliti
                 lgamma( model.prior.π_sh[k,2] ) - lgamma( model.prior.π_sh[k,1] + model.prior.π_sh[k,2] + model.H )
             aa0 = exp(laa0)
 
-            aa = model.prior.π_ξ * aa0
-            p1 = aa / ( aa + 1.0 - model.prior.π_ξ )
+            aa = π_ξ[k] * aa0
+            p1 = aa / ( aa + 1.0 - π_ξ[k] )
 
             model.state.ξ[k] = rand() < p1
 
