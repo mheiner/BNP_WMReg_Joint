@@ -2,17 +2,17 @@
 
 export βδ_x_h_modify_γ, δ_x_h_modify_γ;
 
-function update_η_h_Met!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
+function update_η_h_Met!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T; update_ηy::Bool=true) where T <: Real
     if model.Σx_type == :full
-        update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T)
+        update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T, update_ηy=update_ηy)
     elseif model.Σx_type == :diag
-        update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T)
+        update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T, update_ηy=update_ηy)
     end
 end
 
 
 # pre_compute Λ0star_ηy*β0star_ηy and β0star_ηy'Λ0star_ηy*β0star_ηy which are not indexed by h
-function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
+function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T; update_ηy::Bool=true) where T <: Real
 
     ## if you modify this function, you must modify its sisters.
 
@@ -123,7 +123,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 
         ## Metropolis step for η_x
 
-            ## Compute acceptance ratio
+        ## Compute acceptance ratio
         if not_auto_reject
             lar = lG0_ηlδx(μ_x_h_cand, β_x_h_cand, lδ_x_h_cand, model.state) -
                     sum(lωNX_vec_cand) -
@@ -152,11 +152,13 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 
         ## Full conditional draw (from G0) for η_y
 
-        model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
+        if update_ηy
+            model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
                                         0.5 * model.state.ν_δy * model.state.s0_δy))
-        βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-        model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-        model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+        end
 
     else # some observations are assigned to cluster h (i.e., n_h > 0)
 
@@ -169,23 +171,21 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
         X_h = model.X[indx_h,:]
         D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], γ_h)
 
-        Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
-        β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
+        Λ1star_ηy_h_old = get_Λ1star_ηy_h(D_h_old, model.state.Λ0star_ηy)
+        β1star_ηy_h_old = get_β1star_ηy_h(Λ1star_ηy_h_old, Λβ0star_ηy, D_h_old, y_h)
 
-        a1_δy_old = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-        b1_δy_old = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                                y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
+        a1_δy_old = get_a1_δy_h(model.state.ν_δy, n_h) # posterior IG shape
+        b1_δy_old = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, y_h, βΛβ0star_ηy, Λ1star_ηy_h_old, β1star_ηy_h_old) # posterior IG scale
 
         ## Important quantities for candidate
         if not_auto_reject
             D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, γ_h)
 
-            Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
-            β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
+            Λ1star_ηy_h_cand = get_Λ1star_ηy_h(D_h_cand, model.state.Λ0star_ηy)
+            β1star_ηy_h_cand = get_β1star_ηy_h(Λ1star_ηy_h_cand, Λβ0star_ηy, D_h_cand, y_h)
 
-            a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-            b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                    y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
+            a1_δy_cand = get_a1_δy_h(model.state.ν_δy, n_h) # posterior IG shape
+            b1_δy_cand = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, y_h, βΛβ0star_ηy, Λ1star_ηy_h_cand, β1star_ηy_h_cand) # posterior IG scale
 
             ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified βx and δx)
             lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
@@ -213,21 +213,24 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
             model.state.accpt[h] += 1
 
             ## Full conditional draw for η_y ( use prec. prameterization )
-            model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
-            βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            if update_ηy
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
+                βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+                model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            end
 
         else # reject
 
             ηlδ_x_out = deepcopy(ηlδ_x_old)
 
             ## Full conditional draw for η_y
-            model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
-            βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
-
+            if update_ηy
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
+                βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+                model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            end
         end
     end
 
@@ -243,7 +246,7 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
 end
 
 
-function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
+function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T; update_ηy::Bool=true) where T <: Real
 
     ## if you modify this function, you must modify its sisters.
 
@@ -335,13 +338,13 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
         end
 
         ## Full conditional draw (from G0) for η_y
-
-        model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
+        if update_ηy
+            model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
                                         0.5 * model.state.ν_δy * model.state.s0_δy))
-        βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-        model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-        model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
-
+            βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+        end
     else # some observations are assigned to cluster h (i.e., n_h > 0)
 
         ## Metropolis step for η_x
@@ -353,23 +356,21 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
         X_h = model.X[indx_h,:]
         D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], γ_h)
 
-        Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
-        β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
+        Λ1star_ηy_h_old = get_Λ1star_ηy_h(D_h_old, model.state.Λ0star_ηy)
+        β1star_ηy_h_old = get_β1star_ηy_h(Λ1star_ηy_h_old, Λβ0star_ηy, D_h_old, y_h)
 
-        a1_δy_old = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-        b1_δy_old = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                                y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
+        a1_δy_old = get_a1_δy_h(model.state.ν_δy, n_h) # posterior IG shape
+        b1_δy_old = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, y_h, βΛβ0star_ηy, Λ1star_ηy_h_old, β1star_ηy_h_old) # posterior IG scale
 
         ## Important quantities for candidate
         if not_auto_reject
             D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, γ_h)
 
-            Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
-            β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
+            Λ1star_ηy_h_cand = get_Λ1star_ηy_h(D_h_cand, model.state.Λ0star_ηy)
+            β1star_ηy_h_cand = get_β1star_ηy_h(Λ1star_ηy_h_cand, Λβ0star_ηy, D_h_cand, y_h)
 
-            a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-            b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                    y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
+            a1_δy_cand = get_a1_δy_h(model.state.ν_δy, n_h) # posterior IG shape
+            b1_δy_cand = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, y_h, βΛβ0star_ηy, Λ1star_ηy_h_cand, β1star_ηy_h_cand) # posterior IG scale
 
             ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified βx and δx)
             lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
@@ -394,23 +395,23 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
             model.state.accpt[h] += 1
 
             ## Full conditional draw for η_y ( use prec. prameterization )
-
-            model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
-            βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
-
+            if update_ηy
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
+                βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+                model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            end
         else # reject
 
             ηlδ_x_out = deepcopy(ηlδ_x_old)
 
             ## Full conditional draw for η_y
-
-            model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
-            βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
-
+            if update_ηy
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
+                βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+                model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            end
         end
     end
 
@@ -427,7 +428,7 @@ end
 
 
 
-function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T) where T <: Real
+function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T; update_ηy::Bool=true) where T <: Real
 
     ## if you modify this function, you must modify the originals above.
 
@@ -501,13 +502,13 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
         end
 
         ## Full conditional draw (from G0) for η_y
-
-        model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
+        if update_ηy
+            model.state.δ_y[h] = rand(InverseGamma(0.5 * model.state.ν_δy,
                                         0.5 * model.state.ν_δy * model.state.s0_δy))
-        βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-        model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-        model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
-
+            βstar_ηy = model.state.β0star_ηy + (model.state.Λ0star_ηy.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+        end
     else # some observations are assigned to cluster h (i.e., n_h > 0)
 
         ## Metropolis step for η_x
@@ -519,25 +520,23 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
         X_h = model.X[indx_h,:]
         D_h_old = construct_Dh(h, X_h, model.state.μ_x[h,:], γ_h)
 
-        Λ1star_ηy_h_old = PDMat_adj(D_h_old'D_h_old + model.state.Λ0star_ηy)
-        β1star_ηy_h_old = Λ1star_ηy_h_old \ (Λβ0star_ηy + D_h_old'y_h)
+        Λ1star_ηy_h_old = get_Λ1star_ηy_h(D_h_old, model.state.Λ0star_ηy)
+        β1star_ηy_h_old = get_β1star_ηy_h(Λ1star_ηy_h_old, Λβ0star_ηy, D_h_old, y_h)
 
-        a1_δy_old = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-        b1_δy_old = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                                y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_old, β1star_ηy_h_old)) # posterior IG scale
+        a1_δy_old = get_a1_δy_h(model.state.ν_δy, n_h) # posterior IG shape
+        b1_δy_old = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, y_h, βΛβ0star_ηy, Λ1star_ηy_h_old, β1star_ηy_h_old) # posterior IG scale
 
         if not_auto_reject
-                ## Important quantities for candidate
+            ## Important quantities for candidate
             D_h_cand = construct_Dh(h, X_h, μ_x_h_cand, γ_h)
 
-            Λ1star_ηy_h_cand = PDMat_adj(D_h_cand'D_h_cand + model.state.Λ0star_ηy)
-            β1star_ηy_h_cand = Λ1star_ηy_h_cand \ (Λβ0star_ηy + D_h_cand'y_h)
+            Λ1star_ηy_h_cand = get_Λ1star_ηy_h(D_h_cand, model.state.Λ0star_ηy)
+            β1star_ηy_h_cand = get_β1star_ηy_h(Λ1star_ηy_h_cand, Λβ0star_ηy, D_h_cand, y_h)
 
-            a1_δy_cand = (model.state.ν_δy + n_h) / 2.0 # posterior IG shape
-            b1_δy_cand = 0.5 * (model.state.ν_δy * model.state.s0_δy +
-                    y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h_cand, β1star_ηy_h_cand) ) # posterior IG scale
+            a1_δy_cand = get_a1_δy_h(model.state.ν_δy, n_h) # posterior IG shape
+            b1_δy_cand = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, y_h, βΛβ0star_ηy, Λ1star_ηy_h_cand, β1star_ηy_h_cand) # posterior IG scale
 
-                ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified δx)
+            ## Compute acceptance ratio (lcc_ηlδx does not need γ-modified δx)
             lar = lcc_ηlδx(h, indx_h, lNX_mat_cand, lωNX_vec_cand,
                             model.state, μ_x_h_cand[1], lδ_x_h_cand[1],
                             Λ1star_ηy_h_cand, a1_δy_cand, b1_δy_cand) -
@@ -559,23 +558,23 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
             model.state.accpt[h] += 1
 
             ## Full conditional draw for η_y ( use prec. prameterization )
-
-            model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
-            βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
-
+            if update_ηy
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_cand, b1_δy_cand))
+                βstar_ηy = β1star_ηy_h_cand + (Λ1star_ηy_h_cand.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+                model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            end
         else # reject
 
             ηlδ_x_out = deepcopy(ηlδ_x_old)
 
             ## Full conditional draw for η_y
-
-            model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
-            βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
-            model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
-            model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
-
+            if update_ηy
+                model.state.δ_y[h] = rand(InverseGamma(a1_δy_old, b1_δy_old))
+                βstar_ηy = β1star_ηy_h_old + (Λ1star_ηy_h_old.chol.U \ randn((model.K + 1)) .* sqrt(model.state.δ_y[h]))
+                model.state.μ_y[h] = deepcopy(βstar_ηy[model.indx_ηy[:μ]])
+                model.state.β_y[h,:] = deepcopy(βstar_ηy[model.indx_ηy[:β]])
+            end
         end
     end
 
@@ -747,4 +746,22 @@ function δ_x_h_modify_γ(δ_x::Array{T,1},
     δout = deepcopy(δ_x[γindx]) # H nows and sum(gamma) cols
 
     return δout
+end
+
+
+## helper functions for marginalization
+function get_a1_δy_h(ν_δy::T, n_h::Int) where T <: Real
+    return 0.5 * (ν_δy + n_h)
+end
+
+function get_b1_δy_h(ν_δy::T, s0_δy::T, y_h::Array{T,1}, βΛβ0star_ηy::Array{T,1}, Λ1star_ηy_h::PDMat, β1star_ηy_h::Array{T,1}) where T <: Real
+    return 0.5 * (ν_δy * s0_δy + y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h, β1star_ηy_h))
+end
+
+function get_Λ1star_ηy_h(D_h::Array{T,2}, Λ0star_ηy::PDMat) where T <: Real
+    return PDMat_adj(D_h'D_h + Λ0star_ηy)
+end
+
+function get_β1star_ηy_h(Λ1star_ηy_h::PDMat, Λβ0star_ηy::Array{T,1}, D_h::Array{T,2}, y_h::Array{T,1}) where T <: Real
+    return Λ1star_ηy_h \ (Λβ0star_ηy + D_h'y_h)
 end

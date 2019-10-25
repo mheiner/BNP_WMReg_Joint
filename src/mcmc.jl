@@ -58,13 +58,15 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
                 Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
                 βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
 
+                update_ηy = (j == thin) # only update η_y on collection scan
+
                 if model.K > 1
                     for h = 1:model.H
-                        update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+                        update_η_h_Met!(model, h, Λβ0star_ηy, βΛβ0star_ηy, update_ηy=update_ηy)
                     end
                 else
                     for h = 1:model.H
-                        update_η_h_Met_K1!(model, h, Λβ0star_ηy, βΛβ0star_ηy)
+                        update_η_h_Met_K1!(model, h, Λβ0star_ηy, βΛβ0star_ηy, update_ηy=update_ηy)
                     end
                 end
             end
@@ -82,22 +84,23 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
                 update_G0!(model)
             end
 
-            ## do last, followed by llik calculation
+            ## do last, followed by llik calculation (no longer necessary because marginalized allocation update does not calculate llik numerator)
 
             if updatevars.S
-                llik_num_mat = update_alloc!(model)
-            else
-                llik_num_mat = llik_numerator(model)
+                update_alloc!(model)
             end
 
-            model.state.llik = llik_BNP_WMReg_Joint(llik_num_mat, model.state.lωNX_vec)
+            if j == thin # llik doesn't get used in any updates, so you can calculate it for inference samples only
+                llik_num_mat = llik_numerator(model)
+                model.state.llik = llik_BNP_WMReg_Joint(llik_num_mat, model.state.lωNX_vec)
+            end
 
             model.state.iter += 1
             if model.state.iter % report_freq == 0
                 if writeout
                     report_file = open(report_filename, "a+")
                     write(report_file, "Iter $(model.state.iter) at $(Dates.now())\n")
-                    write(report_file, "Log-likelihood $(model.state.llik)\n")
+                    write(report_file, "Log-likelihood (last inference sample) $(model.state.llik)\n")
                     write(report_file, "Current Metropolis acceptance rates: $(float((model.state.accpt - prev_accpt) / report_freq))\n")
                     write(report_file, "Current allocation: $(counts(model.state.S, 1:model.H))\n")
                     write(report_file, "Current final weight: $(exp(model.state.lω[model.H]))\n")
