@@ -1,5 +1,8 @@
 # update_eta_Met.jl
 
+## To do: 
+# - construct_Dh doesn't need h as an argument
+
 export βδ_x_h_modify_γ, δ_x_h_modify_γ;
 
 function update_η_h_Met!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy::Array{T,1}, βΛβ0star_ηy::T; update_ηy::Bool=true) where T <: Real
@@ -754,6 +757,7 @@ function get_a1_δy_h(ν_δy::T, n_h::Int) where T <: Real
     return 0.5 * (ν_δy + n_h)
 end
 
+## must do no more with y_h than y'y because of its use in update_alloc!()
 function get_b1_δy_h(ν_δy::T, s0_δy::T, y_h::Array{T,1}, βΛβ0star_ηy::Array{T,1}, Λ1star_ηy_h::PDMat, β1star_ηy_h::Array{T,1}) where T <: Real
     return 0.5 * (ν_δy * s0_δy + y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h, β1star_ηy_h))
 end
