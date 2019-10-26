@@ -171,60 +171,131 @@ end
 
 
 
-function update_γ_k!(model::Model_BNP_WMReg_Joint, lNy_old::Array{T,1}, k::Int) where T <: Real
+# function update_γ_k!(model::Model_BNP_WMReg_Joint, lNy_old::Array{T,1}, k::Int) where T <: Real
+
+#     γ_alt = deepcopy(model.state.γ)
+#     γ_alt[k] = !γ_alt[k]
+
+#     lNy_alt = ldens_y(model, γ_alt)
+#     lNX_alt, lωNX_vec_alt = lNXmat_lωNXvec(model, γ_alt)
+
+#     lNx_alt = [ deepcopy(lNX_alt[i, model.state.S[i]]) for i = 1:model.n ]
+#     lNx_old = [ deepcopy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
+
+#     la = log(model.state.π_γ[k])
+#     lb = log(1.0 - model.state.π_γ[k])
+
+#     if model.state.γ[k]
+#         la +=  sum( lNy_old + lNx_old - model.state.lωNX_vec )
+#         lb +=  sum( lNy_alt + lNx_alt - lωNX_vec_alt )
+#         ldenom = BayesInference.logsumexp([la, lb])
+#         lprob_switch = lb - ldenom
+#         lfc_on = la - ldenom
+#     else
+#         la += sum( lNy_alt + lNx_alt - lωNX_vec_alt )
+#         lb += sum( lNy_old + lNx_old - model.state.lωNX_vec )
+#         lprob_switch = la - BayesInference.logsumexp([la, lb])
+#         lfc_on = deepcopy(lprob_switch)
+#     end
+
+#     switch = log(rand()) < lprob_switch
+
+#     if switch
+#         model.state.γ[k] = !model.state.γ[k]
+#         model.state.lNX = deepcopy(lNX_alt)
+#         model.state.lωNX_vec = deepcopy(lωNX_vec_alt)
+#         lNy_old = deepcopy(lNy_alt)
+#     end
+
+#     return lfc_on
+# end
+
+function update_γ_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1}) where T <: Real
+
+    ## Propose deterministic switch of uniformly selected indices
+    K_upd = min(3, length(up_indx))
+    k_upd = sample(StatsBase.Weights( (0.5).^collect(1:K_upd) ))
+    switch_indx = sample(up_indx, k_upd, replace=false)
 
     γ_alt = deepcopy(model.state.γ)
-    γ_alt[k] = !γ_alt[k]
+    γ_alt[switch_indx] = .!γ_alt[switch_indx]
 
-    lNy_alt = ldens_y(model, γ_alt)
+    ## Calculate lmargy under both scenarios
+    Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
+    βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
+
+    indx_h_vec = [ findall(model.state.S .== h) for h = 1:model.H ]
+    n_h_vec = [ length(indx_h_vec[h]) for h = 1:model.H ]
+
+    D_vec = [ construct_Dh(h, model.X[indx_h_vec[h],:], model.state.μ_x[h,:], model.state.γ ) for h = 1:model.H ]
+    
+    ## Calculate Lam1, a1, b1 for all h
+    a1_vec = 0.5 .* ( model.state.ν_δy .+ n_h_vec )
+    Λ1star_ηy_vec = [ n_h_vec[h] > 0 ? get_Λ1star_ηy_h(D_vec[h], model.state.Λ0star_ηy) : deepcopy(model.state.Λ0star_ηy) for h = 1:model.H ]
+    β1star00_vec = [ n_h_vec[h] > 0 ? (Λβ0star_ηy + D_vec[h]'model.y[indx_h_vec[h]]) : deepcopy(Λβ0star_ηy) for h = 1:model.H ]
+    β1star_ηy_vec = [ n_h_vec[h] > 0 ? Λ1star_ηy_vec[h] \ β1star00_vec[h] : deepcopy(model.state.β0star_ηy) for h = 1:model.H ]
+    b1_vec = [ n_h_vec[h] > 0 ? get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[indx_h_vec[h]], βΛβ0star_ηy, Λ1star_ηy_vec[h], β1star_ηy_vec[h]) : 0.0  for h = 1:model.H ]
+
+    lmargy_old = [ n_h_vec[h] > 0 ? lmargy(Λ1star_ηy_vec[h], a1_vec[h], b1_vec[h]) : 0.0 for h = 1:model.H ] # unoccupied components don't contribute
+
+    D_alt_vec = [ construct_Dh(h, model.X[indx_h_vec[h],:], model.state.μ_x[h,:], γ_alt ) for h = 1:model.H ] # could be more efficient, but, meh.
+    Λ1star_ηy_alt_vec = [ n_h_vec[h] > 0 ? get_Λ1star_ηy_h(D_alt_vec[h], model.state.Λ0star_ηy) : deepcopy(model.state.Λ0star_ηy) for h = 1:model.H ]
+    β1star00_alt_vec = [ n_h_vec[h] > 0 ? (Λβ0star_ηy + D_alt_vec[h]'model.y[indx_h_vec[h]]) : deepcopy(Λβ0star_ηy) for h = 1:model.H ]
+    β1star_ηy_alt_vec = [ n_h_vec[h] > 0 ? Λ1star_ηy_alt_vec[h] \ β1star00_alt_vec[h] : deepcopy(model.state.β0star_ηy) for h = 1:model.H ]
+    b1_alt_vec = [ n_h_vec[h] > 0 ? get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[indx_h_vec[h]], βΛβ0star_ηy, Λ1star_ηy_alt_vec[h], β1star_ηy_alt_vec[h]) : 0.0  for h = 1:model.H ]
+
+    lmargy_alt = [ n_h_vec[h] > 0 ? lmargy(Λ1star_ηy_alt_vec[h], a1_vec[h], b1_alt_vec[h]) : 0.0 for h = 1:model.H ]
+
+    ## Calculate lNX under alternate scenario
     lNX_alt, lωNX_vec_alt = lNXmat_lωNXvec(model, γ_alt)
 
+    ## Calculate lNx under both scenarios
     lNx_alt = [ deepcopy(lNX_alt[i, model.state.S[i]]) for i = 1:model.n ]
     lNx_old = [ deepcopy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
 
-    la = log(model.state.π_γ[k])
-    lb = log(1.0 - model.state.π_γ[k])
+    ## Metropolis step
+    lp_old = sum( log.(model.state.π_γ[ findall( model.state.γ[up_indx] ) ]) ) + sum( log.( 1.0 .- model.state.π_γ[ findall( .!model.state.γ[up_indx] ) ]) )
+    lp_old += (sum(lNx_old) - sum(model.state.lωNX_vec) + sum(lmargy_old) )
 
-    if model.state.γ[k]
-        la +=  sum( lNy_old + lNx_old - model.state.lωNX_vec )
-        lb +=  sum( lNy_alt + lNx_alt - lωNX_vec_alt )
-        ldenom = BayesInference.logsumexp([la, lb])
-        lprob_switch = lb - ldenom
-        lfc_on = la - ldenom
-    else
-        la += sum( lNy_alt + lNx_alt - lωNX_vec_alt )
-        lb += sum( lNy_old + lNx_old - model.state.lωNX_vec )
-        lprob_switch = la - BayesInference.logsumexp([la, lb])
-        lfc_on = deepcopy(lprob_switch)
-    end
+    lp_alt = sum( log.(model.state.π_γ[ findall( γ_alt[up_indx] ) ]) ) + sum( log.( 1.0 .- model.state.π_γ[ findall( .!γ_alt[up_indx] ) ]) )
+    lp_alt += (sum(lNx_alt) - sum(lωNX_vec_alt) + sum(lmargy_alt) )
 
-    switch = log(rand()) < lprob_switch
+    switch = log(rand()) < ( lp_alt - lp_old )
 
     if switch
-        model.state.γ[k] = !model.state.γ[k]
+        model.state.γ = γ_alt
         model.state.lNX = deepcopy(lNX_alt)
         model.state.lωNX_vec = deepcopy(lωNX_vec_alt)
-        lNy_old = deepcopy(lNy_alt)
     end
 
-    return lfc_on
+    return nothing
 end
+
+# function update_γ_global!(model::Model_BNP_WMReg_Joint)
+
+#     ## calculate lNy
+#     lNy = ldens_y(model, model.state.γ)
+
+#     up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
+#     lfc_on = deepcopy(model.state.π_γ)
+
+#     ## loop through k
+#     for k in up_indx
+#         lfc_on[k] = update_γ_k!(model, lNy, k)
+#     end
+
+#     return lfc_on
+# end
 
 function update_γ_global!(model::Model_BNP_WMReg_Joint)
 
-    ## calculate lNy
-    lNy = ldens_y(model, model.state.γ)
-
     up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
-    lfc_on = deepcopy(model.state.π_γ)
 
-    ## loop through k
-    for k in up_indx
-        lfc_on[k] = update_γ_k!(model, lNy, k)
-    end
+    update_γ_block!(model, up_indx)
 
-    return lfc_on
+    return zeros(model.K)
 end
+
 
 function update_γ!(model::Model_BNP_WMReg_Joint)
 
