@@ -370,29 +370,115 @@ end
 # end
 
 
+function lmargy(Λ::PDMat, a::T, b::T) where T <: Real
+    return 0.5 * logdet(Λ) + lgamma(a) - a * log(b)
+end
+
+
 function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
 
-    lNX = 
+    Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
+    βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
 
-    D =
-    Dh_vec = [ for h = 1:model.H ]
-    yh_vec = [ for h = 1:model.H ]
+    if model.γ_type == :local
+        γ = deepcopy(model.state.γ)
+    elseif model.γ_type == :global
+        γ = permutedims( hcat( fill(model.state.γ, model.H)... ) )
+    end
+
+    indx_h_vec = [ findall(model.state.S .== h) for h = 1:model.H ]
+    n_h_vec = [ length(indx_h_vec[h]) for h = 1:model.H ]
+
+    D_vec = [ construct_Dh(h, model.X, model.state.μ_x[h,:], γ[h,:] ) for h = 1:model.H ] # this is evaluated for ALL i and h, so it never changes
+    
+    ## Calculate Lam1, a1, b1 for all h; these will evolve
+    a1_vec = 0.5 .* ( model.state.ν_δy .+ n_h_vec )
+    Λ1star_ηy_vec = [ n_h_vec[h] > 0 ? get_Λ1star_ηy_h(D_vec[h][indx_h_vec[h],:], model.state.Λ0star_ηy) : deepcopy(model.state.Λ0star_ηy) for h = 1:model.H ]
+    β1star00_vec = [ n_h_vec[h] > 0 ? (Λβ0star_ηy + D_vec[h][indx_h_vec[h],:]'model.y[indx_h_vec[h]]) : deepcopy(Λβ0star_ηy) for h = 1:model.H ]
+    β1star_ηy_vec = [ n_h_vec[h] > 0 ? Λ1star_ηy_vec[h] \ β1star00_vec[h] : deepcopy(model.state.β0star_ηy) for h = 1:model.H ]
+    b1_vec = [ n_h_vec[h] > 0 ? get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[indx_h_vec[h]], βΛβ0star_ηy, Λ1star_ηy_vec[h], β1star_ηy_vec[h]) : 0.5*(model.state.ν_δy * model.state.s0_δy)  for h = 1:model.H ]
+
+    lmargy_n0 = lmargy(model.state.Λ0star_ηy, 0.5*model.state.ν_δy, 0.5*(model.state.ν_δy * model.state.s0_δy)) # this remains constant throughout
+    lmargy_out = [ n_h_vec[h] > 0 ? lmargy(Λ1star_ηy_vec[h], a1_vec[h], b1_vec[h]) : deepcopy(lmargy_n0) for h = 1:model.H ] # this currently has y_i in its component
 
     for i = 1:model.n
 
+        Si = model.state.S[i]
+        
+        ## collect Lam1, a1, b1 for the h without y_i
+        lmargy_in = deepcopy(lmargy_out)
+
+        ## create tmps (alternates)
+        Λ_tmp_vec = deepcopy(Λ1star_ηy_vec)
+        β1star00_tmp_vec = deepcopy(β1star00_vec)
+        β1star_tmp_vec = deepcopy(β1star_ηy_vec)
+        b1_tmp_vec = deepcopy(b1_vec)
+
+        ## remove y_i from its component
+        if n_h_vec[Si] == 1 # if it was the only one in the component
+            lmargy_out[ Si ] = deepcopy(lmargy_n0)
+            Λ_tmp_vec[ Si ] = deepcopy(model.state.Λ0star_ηy)
+            β1star00_tmp_vec[ Si ] = deepcopy(Λβ0star_ηy)
+            β1star_tmp_vec[ Si ] = deepcopy(model.state.β0star_ηy)
+            b1_tmp_vec[ Si ] = 0.5*(model.state.ν_δy * model.state.s0_δy)
+        else
+            d_tmp = deepcopy(D_vec[Si][i,:])
+            Λ_tmp_vec[ Si ] -= d_tmp * d_tmp'
+            β1star00_tmp_vec[ Si ] -= (d_tmp .* model.y[i])
+            β1star_tmp_vec[ Si ] = Λ_tmp_vec[ Si ] \ β1star00_tmp_vec[ Si ]
+            b1_tmp_vec[ Si ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[indx_h_vec[Si .!= i]], βΛβ0star_ηy, 
+                Λ_tmp_vec[ Si ], β1star_tmp_vec[ Si] )
+            lmargy_out[ Si ] = lmargy(Λ_tmp_vec[ Si ], a1_vec[ Si ] - 0.5,  b1_tmp_vec[ Si ])
+        end
+
+        ## evaluate all Lam1, a1, b1, as if y_i assigned to its component
+        for h in setdiff(1:model.H, Si)
+            d_tmp = deepcopy(D_vec[Si][i,:])
+            Λ_tmp_vec[ h ] += d_tmp * d_tmp'
+            β1star00_tmp_vec[ h ] += (d_tmp .* model.y[i])
+            β1star_tmp_vec[ h ] = Λ_tmp_vec[h] \ β1star00_tmp_vec[h]
+            b1_tmp_vec[h] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, vcat(model.y[indx_h_vec[h]], model.y[i]), βΛβ0star_ηy, 
+                Λ_tmp_vec[h], β1star_tmp_vec[h]) # may concatenate y since that argument only calulates y'y
+            lmargy_in[ h ] = lmargy(Λ_tmp_vec[h], a1_vec[h] + 0.5, b1_tmp_vec[h])
+        end
+
+        lw = [ sum(lmargy_out[ 1:end .!= h ]) + lmargy_in[h] for h = 1:model.H ]
+
+        lw += model.state.lω
+        lw += model.state.lNX[i,:]
 
         lw = lw .- maximum(lw)
         w = exp.(lw)
 
         ## Metropolized discrete Gibbs draw
         w_cand = deepcopy(w)
-        w_cand[model.state.S[i]] = 0.0
+        w_cand[Si] = 0.0
         cand = sample(StatsBase.Weights(w_cand))
         lar = logsumexp( lw[ 1:end .!= model.state.S ] ) - logsumexp( lw[ 1:end .!= cand ] )
         if log(rand()) < lar
+            # update the running stats
+            indx_h_vec[ Si ] = setdiff( indx_h_vec[ Si ], i ) # take i out of its currently assigned set
+            push!( indx_h_vec[cand], i ) # and add it to its newly assigned set (order doesn't matter)
+            n_h_vec[ Si ] -= 1
+            n_h_vec[ cand ] += 1
+            a1_vec[ Si ] -= 0.5
+            a1_vec[ cand ] += 0.5
+            Λ1star_ηy_vec[ Si ] = deepcopy( Λ_tmp_vec[ Si ] )
+            Λ1star_ηy_vec[ cand ] = deepcopy( Λ_tmp_vec[ cand ] )
+            β1star00_vec[ Si ] = deepcopy( β1star00_tmp_vec[ Si ] )
+            β1star00_vec[ cand ] = deepcopy( β1star00_tmp_vec[ cand ] )
+            β1star_ηy_vec[ Si ] = deepcopy( β1star_tmp_vec[ Si ] )
+            β1star_ηy_vec[ cand ] = deepcopy( β1star_tmp_vec[ cand ] )
+            b1_vec[ Si ] = deepcopy( b1_tmp_vec[ Si ] )
+            b1_vec[ cand ] = deepcopy( b1_tmp_vec[ cand ] )
+
+            lmargy_out[ cand ] = deepcopy( lmargy_in[ cand ] ) # at the start of each iteration of the loop, lmargy_out reflects the current lmargy vector
+
+            # update S[i]
             model.state.S[i] = cand
         else
-
+            lmargy_out[ Si ] = deepcopy( lmargy_in[ cand ] ) # put y_i back in so lmargy_out reflects the lmargy vector before this iteration of the loop
+            # nothing else?
         end
 
     end
