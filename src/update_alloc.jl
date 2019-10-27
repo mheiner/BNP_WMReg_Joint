@@ -423,10 +423,10 @@ function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
             b1_tmp_vec[ Si ] = 0.5*(model.state.ν_δy * model.state.s0_δy)
         else
             d_tmp = deepcopy(D_vec[Si][i,:])
-            Λ_tmp_vec[ Si ] -= d_tmp * d_tmp'
+            Λ_tmp_vec[ Si ] = PDMat( Λ_tmp_vec[ Si ] + (-1.0) .* d_tmp * d_tmp' )
             β1star00_tmp_vec[ Si ] -= (d_tmp .* model.y[i])
             β1star_tmp_vec[ Si ] = Λ_tmp_vec[ Si ] \ β1star00_tmp_vec[ Si ]
-            b1_tmp_vec[ Si ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[indx_h_vec[Si .!= i]], βΛβ0star_ηy, 
+            b1_tmp_vec[ Si ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[setdiff(indx_h_vec[Si], i)], βΛβ0star_ηy, 
                 Λ_tmp_vec[ Si ], β1star_tmp_vec[ Si] )
             lmargy_out[ Si ] = lmargy(Λ_tmp_vec[ Si ], a1_vec[ Si ] - 0.5,  b1_tmp_vec[ Si ])
         end
@@ -434,7 +434,7 @@ function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
         ## evaluate all other Lam1, a1, b1, as if y_i assigned to its component
         for h in setdiff(1:model.H, Si)
             d_tmp = deepcopy(D_vec[h][i,:])
-            Λ_tmp_vec[ h ] += d_tmp * d_tmp'
+            Λ_tmp_vec[ h ] = PDMat( Λ_tmp_vec[ h ] + d_tmp * d_tmp' )
             β1star00_tmp_vec[ h ] += (d_tmp .* model.y[i])
             β1star_tmp_vec[ h ] = Λ_tmp_vec[h] \ β1star00_tmp_vec[h]
             b1_tmp_vec[ h ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, vcat(model.y[indx_h_vec[h]], model.y[i]), βΛβ0star_ηy, 

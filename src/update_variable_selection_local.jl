@@ -236,12 +236,13 @@ function update_γ_local!(model::Model_BNP_WMReg_Joint)
 
     up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
 
-    for h = 1:model.H
+    if length(up_indx) > 0
+        for h = 1:model.H
 
-        update_γ_h_block!(model, up_indx, h)
+            update_γ_h_block!(model, up_indx, h)
 
+        end
     end
-
     return zeros(model.H, model.K)
 end
 

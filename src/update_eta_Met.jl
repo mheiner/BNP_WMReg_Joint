@@ -758,7 +758,7 @@ function get_a1_δy_h(ν_δy::T, n_h::Int) where T <: Real
 end
 
 ## must do no more with y_h than y'y because of its use in update_alloc!()
-function get_b1_δy_h(ν_δy::T, s0_δy::T, y_h::Array{T,1}, βΛβ0star_ηy::Array{T,1}, Λ1star_ηy_h::PDMat, β1star_ηy_h::Array{T,1}) where T <: Real
+function get_b1_δy_h(ν_δy::T, s0_δy::T, y_h::Array{T,1}, βΛβ0star_ηy::T, Λ1star_ηy_h::PDMat, β1star_ηy_h::Array{T,1}) where T <: Real
     return 0.5 * (ν_δy * s0_δy + y_h'y_h + βΛβ0star_ηy - PDMats.quad(Λ1star_ηy_h, β1star_ηy_h))
 end
 

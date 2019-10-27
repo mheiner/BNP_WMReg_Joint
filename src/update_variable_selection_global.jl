@@ -291,7 +291,9 @@ function update_γ_global!(model::Model_BNP_WMReg_Joint)
 
     up_indx = findall( [ model.state.π_γ[k] < 1.0 && model.state.π_γ[k] > 0.0 for k = 1:model.K ] )
 
-    update_γ_block!(model, up_indx)
+    if length(up_indx) > 0
+        update_γ_block!(model, up_indx)
+    end
 
     return zeros(model.K)
 end
