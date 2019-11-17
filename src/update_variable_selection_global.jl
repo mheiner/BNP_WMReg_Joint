@@ -254,10 +254,12 @@ function update_γ_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1}) w
     lNx_old = [ deepcopy(model.state.lNX[i, model.state.S[i]]) for i = 1:model.n ]
 
     ## Metropolis step
-    lp_old = sum( log.(model.state.π_γ[ findall( model.state.γ[up_indx] ) ]) ) + sum( log.( 1.0 .- model.state.π_γ[ findall( .!model.state.γ[up_indx] ) ]) )
+    lp_old = sum( log.(model.state.π_γ[switch_indx][ findall( model.state.γ[switch_indx] ) ]) ) + 
+             sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!model.state.γ[switch_indx] ) ]) )
     lp_old += (sum(lNx_old) - sum(model.state.lωNX_vec) + sum(lmargy_old) )
 
-    lp_alt = sum( log.(model.state.π_γ[ findall( γ_alt[up_indx] ) ]) ) + sum( log.( 1.0 .- model.state.π_γ[ findall( .!γ_alt[up_indx] ) ]) )
+    lp_alt = sum( log.(model.state.π_γ[switch_indx][ findall( γ_alt[switch_indx] ) ]) ) + 
+             sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!γ_alt[switch_indx] ) ]) )
     lp_alt += (sum(lNx_alt) - sum(lωNX_vec_alt) + sum(lmargy_alt) )
 
     switch = log(rand()) < ( lp_alt - lp_old )

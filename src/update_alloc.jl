@@ -315,7 +315,7 @@ function llik_numerator_Σx_diag(y::Array{T,1}, X::Array{T,2}, K::Int, H::Int,
     return lW # lW is a n by H matrix
 end
 
-
+## Standard Gibbs
 # function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
 
 #     lW = llik_numerator(model)
@@ -331,7 +331,38 @@ end
 
 #     return lW # for llik calculation
 # end
-## The alternates below are deprecated, but may be useful sometime?
+
+## Metropolized full conditional update
+# function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
+
+#     lW = llik_numerator(model)
+
+#     ms = maximum(lW, dims=2) # maximum across columns
+#     bc_lWmimusms = broadcast(-, lW, ms)
+#     W = exp.(bc_lWmimusms)
+
+#     ## Metropolized discrete Gibbs
+#     for i in 1:model.n
+
+#         Si = deepcopy(model.state.S[i])
+#         w_cand = deepcopy(W[i,:])
+#         w_cand[Si] = 0.0
+#         cand = sample(StatsBase.Weights(w_cand))
+#         lar = logsumexp( bc_lWmimusms[i, 1:end .!= Si ] ) - logsumexp( bc_lWmimusms[i, 1:end .!= cand ] )
+
+#         if log(rand()) < lar
+#             model.state.S[i] = deepcopy(cand)
+#         end
+
+#     end
+
+#     model.state.n_occup = length(unique(model.state.S))
+
+#     return lW # for llik calculation
+# end
+
+
+## These alternates are deprecated, but may be useful sometime?
 # function update_alloc!(model::Model_BNP_WMReg_Joint, yX::Array{T,2}) where T <: Real
 
 #     lW = llik_numerator(yX, model.K, model.H,
@@ -374,7 +405,7 @@ function lmargy(Λ::PDMat, a::T, b::T) where T <: Real
     return -0.5 * logdet(Λ) + lgamma(a) - a * log(b)
 end
 
-
+## Integrate out eta_y and Metropolize
 function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
 
     ## These remain fixed throughout

@@ -58,7 +58,8 @@ function mcmc!(model::Model_BNP_WMReg_Joint, n_keep::Int,
                 Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
                 βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
 
-                update_ηy = (j == thin) # only update η_y on collection scan
+                # update_ηy = (j == thin) # only update η_y on collection scan
+                update_ηy = true
 
                 if model.K > 1
                     for h = 1:model.H
@@ -151,7 +152,8 @@ function adapt!(model::Model_BNP_WMReg_Joint;
     updatevars::Updatevars_BNP_WMReg_Joint,
     report_filename::String="out_progress.txt",
     maxtries::Int=50,
-    accptr_bnds::Vector{T}=[0.23, 0.44], adjust_bnds::Vector{T}=[0.01, 10.0]) where T <: Real
+    accptr_bnds::Vector{T}=[0.23, 0.44], adjust_bnds::Vector{T}=[0.01, 10.0],
+    tune_only::Bool=false) where T <: Real
 
     target = StatsBase.mean(accptr_bnds)
     d = size(model.state.runningsum_ηlδx, 2)
@@ -255,66 +257,67 @@ function adapt!(model::Model_BNP_WMReg_Joint;
         end
     end
 
+    if !tune_only
+        ## cΣ collection
+        report_file = open(report_filename, "a+")
+        write(report_file, "\n\nBeginning Adaptation Phase 3 of 4 (covariance collection) at $(Dates.now())\n\n")
+        close(report_file)
 
-    ## cΣ collection
-    report_file = open(report_filename, "a+")
-    write(report_file, "\n\nBeginning Adaptation Phase 3 of 4 (covariance collection) at $(Dates.now())\n\n")
-    close(report_file)
+        reset_adapt!(model)
+        model.state.adapt = true
+        model.state.adapt_thin = deepcopy(adapt_thin)
 
-    reset_adapt!(model)
-    model.state.adapt = true
-    model.state.adapt_thin = deepcopy(adapt_thin)
-
-    sims, accptr = mcmc!(model, n_iter_collectSS, updatevars,
-        Monitor_BNP_WMReg_Joint(false, false, false, false),
-        report_filename, 1, n_iter_collectSS)
-
-    for h = 1:model.H
-        Sighat = model.state.runningSS_ηlδx[h,:,:] / float(model.state.adapt_iter)
-        minSighat = minimum(abs.(Sighat))
-        SighatPD = Sighat + Matrix(Diagonal(fill(0.1*minSighat, d)))
-        model.state.cSig_ηlδx[h] = PDMat_adj(collect_scale * SighatPD)
-    end
-
-    ## final scaling
-    report_file = open(report_filename, "a+")
-    write(report_file, "\n\nBeginning Adaptation Phase 4 of 4 (final scaling) at $(Dates.now())\n\n")
-    close(report_file)
-
-    model.state.adapt = false
-    reset_adapt!(model)
-    tries = 0
-
-    fails = trues(model.H)
-
-    while any(fails)
-        tries += 1
-        if tries > maxtries
-            println("Exceeded maximum adaptation attempts, Phase 4\n")
-            report_file = open(report_filename, "a+")
-            write(report_file, "\n\nExceeded maximum adaptation attempts, Phase 4\n\n")
-            close(report_file)
-            break
-        end
-
-        sims, accptr = mcmc!(model, n_iter_scale, updatevars,
+        sims, accptr = mcmc!(model, n_iter_collectSS, updatevars,
             Monitor_BNP_WMReg_Joint(false, false, false, false),
-            tries == 1 ? report_filename : nothing,
-            1, n_iter_scale)
+            report_filename, 1, n_iter_collectSS)
 
         for h = 1:model.H
-            too_low = accptr[h] < accptr_bnds[1]
-            too_high = accptr[h] > accptr_bnds[2]
+            Sighat = model.state.runningSS_ηlδx[h,:,:] / float(model.state.adapt_iter)
+            minSighat = minimum(abs.(Sighat))
+            SighatPD = Sighat + Matrix(Diagonal(fill(0.1*minSighat, d)))
+            model.state.cSig_ηlδx[h] = PDMat_adj(collect_scale * SighatPD)
+        end
 
-            if too_low || too_high
-                fails[h] = true
-                model.state.cSig_ηlδx[h] *= adjust_from_accptr(accptr[h], target, adjust_bnds)
-            else
-                fails[h] = false
+        ## final scaling
+        report_file = open(report_filename, "a+")
+        write(report_file, "\n\nBeginning Adaptation Phase 4 of 4 (final scaling) at $(Dates.now())\n\n")
+        close(report_file)
+
+        model.state.adapt = false
+        reset_adapt!(model)
+        tries = 0
+
+        fails = trues(model.H)
+
+        while any(fails)
+            tries += 1
+            if tries > maxtries
+                println("Exceeded maximum adaptation attempts, Phase 4\n")
+                report_file = open(report_filename, "a+")
+                write(report_file, "\n\nExceeded maximum adaptation attempts, Phase 4\n\n")
+                close(report_file)
+                break
+            end
+
+            sims, accptr = mcmc!(model, n_iter_scale, updatevars,
+                Monitor_BNP_WMReg_Joint(false, false, false, false),
+                tries == 1 ? report_filename : nothing,
+                1, n_iter_scale)
+
+            for h = 1:model.H
+                too_low = accptr[h] < accptr_bnds[1]
+                too_high = accptr[h] > accptr_bnds[2]
+
+                if too_low || too_high
+                    fails[h] = true
+                    model.state.cSig_ηlδx[h] *= adjust_from_accptr(accptr[h], target, adjust_bnds)
+                else
+                    fails[h] = false
+                end
+
             end
 
         end
-
     end
 
     report_file = open(report_filename, "a+")

@@ -166,6 +166,8 @@ end
 #     return lfc_on
 # end
 
+
+## eta_y marginalized and Metropolized update
 function update_γ_h_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1}, h::Int) where T <: Real
 
     ## Propose deterministic switch of uniformly selected indices
@@ -215,10 +217,12 @@ function update_γ_h_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1},
     lNx_h_old = deepcopy( model.state.lNX[indx_h, h] )
 
     ## Metropolis step
-    lp_old = sum( log.(model.state.π_γ[ findall( model.state.γ[h, up_indx] ) ]) ) + sum( log.( 1.0 .- model.state.π_γ[ findall( .!model.state.γ[h, up_indx] ) ]) )
+    lp_old = sum( log.(model.state.π_γ[switch_indx][ findall( model.state.γ[h, switch_indx] ) ]) ) + 
+             sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!model.state.γ[h, switch_indx] ) ]) )
     lp_old += (sum(lNx_h_old) - sum(model.state.lωNX_vec) + sum(lmargy_old) )
 
-    lp_alt = sum( log.(model.state.π_γ[ findall( γ_h_alt[up_indx] ) ]) ) + sum( log.( 1.0 .- model.state.π_γ[ findall( .!γ_h_alt[up_indx] ) ]) )
+    lp_alt = sum( log.(model.state.π_γ[switch_indx][ findall( γ_h_alt[switch_indx] ) ]) ) + 
+             sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!γ_h_alt[switch_indx] ) ]) )
     lp_alt += (sum(lNx_h_alt) - sum(lωNX_vec_alt) + sum(lmargy_alt) )
 
     switch = log(rand()) < ( lp_alt - lp_old )
@@ -231,6 +235,56 @@ function update_γ_h_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1},
 
     return nothing
 end
+
+
+# # Metropolized update only
+# function update_γ_h_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1}, h::Int) where T <: Real
+
+#     ## Propose deterministic switch of uniformly selected indices
+#     K_upd = min(3, length(up_indx)) # maximum possible gammas to update
+#     k_upd = sample(StatsBase.Weights( (0.5).^collect(1:K_upd) )) # select how many to update
+#     switch_indx = sample(up_indx, k_upd, replace=false)
+
+#     γ_h_alt = deepcopy(model.state.γ[h,:])
+#     γ_h_alt[switch_indx] = .!γ_h_alt[switch_indx]
+
+#     indx_h = findall(model.state.S .== h)
+#     n_h = length(indx_h)
+
+#     ## Calculate lNy under both scenarios
+#     lNy_h_alt = ldens_y_h(model, γ_h_alt, h)
+#     lNy_h_old = ldens_y_h(model, model.state.γ[h,:], h)
+    
+#     ## Calculate lNX under alternate scenario
+#     lNX_alt, lωNX_vec_alt = lNXmat_lωNXvec_h(model, γ_h_alt, h)
+
+#     ## Calculate lNx under both scenarios
+#     lNx_h_alt = deepcopy( lNX_alt[indx_h, h] )
+#     lNx_h_old = deepcopy( model.state.lNX[indx_h, h] )
+
+#     ## Metropolis step
+#     lp_old = sum( log.(model.state.π_γ[switch_indx][ findall( model.state.γ[h, switch_indx] ) ]) ) + 
+#              sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!model.state.γ[h, switch_indx] ) ]) )
+#     lp_old += ( sum(lNx_h_old) - sum(model.state.lωNX_vec) + sum( lNy_h_old ) )
+
+#     lp_alt = sum( log.(model.state.π_γ[switch_indx][ findall( γ_h_alt[switch_indx] ) ]) ) + 
+#              sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!γ_h_alt[switch_indx] ) ]) )
+#     lp_alt += ( sum(lNx_h_alt) - sum(lωNX_vec_alt) + sum( lNy_h_alt ) )
+
+#     switch = log(rand()) < ( lp_alt - lp_old )
+
+#     if switch
+#         model.state.γ[h,:] = γ_h_alt
+#         model.state.lNX = deepcopy(lNX_alt)
+#         model.state.lωNX_vec = deepcopy(lωNX_vec_alt)
+#     end
+
+#     return nothing
+# end
+
+
+
+
 
 function update_γ_local!(model::Model_BNP_WMReg_Joint)
 

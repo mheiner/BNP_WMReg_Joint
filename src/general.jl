@@ -221,8 +221,8 @@ function Prior_BNP_WMReg_Joint(K::Int, H::Int;
         s0_δx_s0_ranXfact = 8.0
         α_sh = 5.0
     elseif Σx_type == :diag
-        s0_δx_s0_ranXfact = 16.0
-        α_sh = 10.0
+        s0_δx_s0_ranXfact = 12.0
+        α_sh = 6.0
     end
     
     s0_δx_s0 = (range_X ./ s0_δx_s0_ranXfact ).^2
@@ -241,7 +241,7 @@ function Prior_BNP_WMReg_Joint(K::Int, H::Int;
     center_X, # μ0_μx_mean
     PDMat(Matrix(Diagonal( (range_X ./ 6.0).^2 ))), # μ0_μx_Cov; needs to stay in close to center_X
     10.0*(K+2), # Λ0_μx_df; should be strong
-    PDMat(Matrix(Diagonal( (range_X ./ 1.0).^2  ))), # Λ0_μx_S0; should give flexibility to mu_xs
+    PDMat(Matrix(Diagonal( (range_X ./ 2.0).^2  ))), # Λ0_μx_S0; should give flexibility to mu_xs
     (K > 1 ? [zeros(k) for k = (K-1):-1:1] : nothing), # β0_βx_mean
     (K > 1 ? [ PDMat(Matrix(Diagonal(fill(1.0, k)))) for k = (K-1):-1:1 ] : nothing), # β0_βx_Cov
     (K > 1 ? fill(10.0*(K+2), K-1) : nothing), # Λ0_βx_df
