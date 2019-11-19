@@ -414,7 +414,7 @@ function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
 
     if model.γ_type == :local
         D_vec = [ construct_Dh(h, model.X, model.state.μ_x[h,:], model.state.γ[h,:] ) for h = 1:model.H ] # this is evaluated for ALL i and h, so it never changes
-    elseif model.γ_type == :global
+    elseif model.γ_type in (:fixed, :global)
         D_vec = [ construct_Dh(h, model.X, model.state.μ_x[h,:], model.state.γ ) for h = 1:model.H ] # this is evaluated for ALL i and h, so it never changes
     end
     
