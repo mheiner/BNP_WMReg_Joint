@@ -125,12 +125,12 @@ function ldensweight_mat(X_pred::Array{T,2}, sims::Union{Array{Dict{Symbol,Any},
                             elseif nγ == 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
 
                                 σ2x = sqfChol_to_Σ( [ sims[ii][:β_x][j][h,:] for j = 1:length(sims[ii][:β_x]) ], sims[ii][:δ_x][h,:] ).mat[γindx, γindx][1]
-                                lNX[:,h] = logpdf.(Normal(sims[ii][:μ_x][h,γindx], sqrt(σ2x)), vec(X_pred[:,γindx]))
+                                lNX[:,h] = logpdf.(Normal(sims[ii][:μ_x][h,γindx[1]], sqrt(σ2x)), vec(X_pred[:,γindx[1]]))
 
                             elseif nγ == 1 && isnothing(sims[ii][:β_x]) # indicates Σx_type is :diag
 
                                 σ2x = deepcopy( sims[ii][:δ_x][h,γindx] )
-                                lNX[:,h] = logpdf.(Normal(sims[ii][:μ_x][h,γindx], sqrt(σ2x)), vec(X_pred[:,γindx]))
+                                lNX[:,h] = logpdf.(Normal(sims[ii][:μ_x][h,γindx[1]], sqrt(σ2x)), vec(X_pred[:,γindx[1]]))
 
                             elseif nγ > 1 && !isnothing(sims[ii][:β_x]) # indicates Σx_type is :full
 

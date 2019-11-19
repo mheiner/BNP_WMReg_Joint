@@ -63,12 +63,12 @@ function lNXmat_lωNXvec_h(model::Model_BNP_WMReg_Joint, γ_h::BitArray{1}, h::I
             if model.K > 1 && model.Σx_type == :full
                 σ2x = sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:length(model.state.β_x) ], model.state.δ_x[h,:] ).mat[γindx, γindx][1]
             elseif model.K > 1 && model.Σx_type == :diag
-                σ2x = deepcopy(model.state.δ_x[h,γindx])
+                σ2x = deepcopy(model.state.δ_x[h,γindx[1]])
             elseif model.K == 1
                 σ2x = deepcopy(model.state.δ_x[h,1])
             end
 
-            lNX[:,h] = logpdf.(Normal(model.state.μ_x[h,γindx], sqrt(σ2x)), vec(model.X[:,γindx]))
+            lNX[:,h] = logpdf.(Normal(model.state.μ_x[h,γindx[1]], sqrt(σ2x)), vec(model.X[:,γindx]))
 
         elseif nγ > 1 && model.Σx_type == :full
 
