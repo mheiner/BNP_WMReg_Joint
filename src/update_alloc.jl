@@ -436,10 +436,10 @@ function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
 
         Si = model.state.S[i]
         
-        ## collect Lam1, a1, b1 for the h without y_i
+        ### collect Lam1, a1, b1 for component Si without y_i
         lmargy_in = deepcopy(lmargy_out)
 
-        ## create tmps (alternates)
+        ## create tmps (these will reflect the 'alternate' state for each h=1:H)
         Λ_tmp_vec = deepcopy(Λ1star_ηy_vec)
         β1star00_tmp_vec = deepcopy(β1star00_vec)
         β1star_tmp_vec = deepcopy(β1star_ηy_vec)
@@ -454,15 +454,17 @@ function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
             b1_tmp_vec[ Si ] = 0.5*(model.state.ν_δy * model.state.s0_δy)
         else
             d_tmp = deepcopy(D_vec[Si][i,:])
-            Λ_tmp_vec[ Si ] = PDMat( Λ_tmp_vec[ Si ] + (-1.0) .* d_tmp * d_tmp' )
+            Λ_tmp_vec[ Si ] = PDMat( Λ_tmp_vec[ Si ] + (-1.0) .* d_tmp * d_tmp' ) # PDMats doesn't have a subtract function
             β1star00_tmp_vec[ Si ] -= (d_tmp .* model.y[i])
             β1star_tmp_vec[ Si ] = Λ_tmp_vec[ Si ] \ β1star00_tmp_vec[ Si ]
             b1_tmp_vec[ Si ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[setdiff(indx_h_vec[Si], i)], βΛβ0star_ηy, 
-                Λ_tmp_vec[ Si ], β1star_tmp_vec[ Si] )
+                Λ_tmp_vec[ Si ], β1star_tmp_vec[ Si ] )
             lmargy_out[ Si ] = lmargy(Λ_tmp_vec[ Si ], a1_vec[ Si ] - 0.5,  b1_tmp_vec[ Si ])
         end
 
-        ## evaluate all other Lam1, a1, b1, as if y_i assigned to its component
+        # now lmargy_out and all tmps are as though y_i didn't exist
+
+        ### evaluate all other Lam1, a1, b1, as if y_i assigned to its component
         for h in setdiff(1:model.H, Si)
             d_tmp = deepcopy(D_vec[h][i,:])
             Λ_tmp_vec[ h ] = PDMat( Λ_tmp_vec[ h ] + d_tmp * d_tmp' )
@@ -473,6 +475,9 @@ function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
             lmargy_in[ h ] = lmargy(Λ_tmp_vec[h], a1_vec[h] + 0.5, b1_tmp_vec[h])
         end
 
+        # now lmargy_in and all tmp[1:H \ Si] are are as though y_i were assigned to its h slot
+        # lmargy_out is still as though y_i didn't exist
+
         lw = [ sum(lmargy_out[ 1:end .!= h ]) + lmargy_in[h] for h = 1:model.H ]
 
         lw += model.state.lω
@@ -481,7 +486,7 @@ function update_alloc!(model::Model_BNP_WMReg_Joint) where T <: Real
         lw .-= maximum(lw)
         w = exp.(lw)
 
-        ## Metropolized discrete Gibbs
+        ## Metropolized discrete Gibbs (Liu, 1996)
         w_cand = deepcopy(w)
         w_cand[Si] = 0.0
         cand = sample(StatsBase.Weights(w_cand))
