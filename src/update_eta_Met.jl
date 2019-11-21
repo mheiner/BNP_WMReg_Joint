@@ -55,15 +55,13 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
         if model.state.γδc == Inf # subset method
             if nγ == 0
                 lNX_mat_cand[:,h] = zeros(Float64, model.n)
-                lωNX_vec_cand = zeros(Float64, model.n) # n vector
             elseif nγ == 1
                 lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[γindx[1]], sqrt(δ_x_h_cand[γindx[1]])), vec(model.X[:,γindx]))
-                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
             elseif nγ > 1
                 βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
                     γ_h, model.state.γδc) # either variance-inflated or subset
 
-                tmp = lNX_sqfChol(Matrix(model.X[:,γindx]'),
+                tmp = lNX_sqfChol(permutedims(model.X[:,γindx]),
                     μ_x_h_cand[γindx], βγ_x_h_cand, δγ_x_h_cand, false) # false means set to return nothing if not pos.def.
 
                 if isnothing(tmp)
@@ -71,14 +69,14 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
                     not_auto_reject = !auto_reject
                 else
                     lNX_mat_cand[:,h] = deepcopy(tmp)
-                    lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
                 end
-
             end
+
+            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+
         elseif isnothing(model.state.γδc) # integration method
             if nγ == 0
                 lNX_mat_cand[:,h] = zeros(Float64, model.n)
-                lωNX_vec_cand = zeros(Float64, model.n) # n vector
             elseif nγ == 1
                 tmp = sqfChol_to_Σ(β_x_h_cand, δ_x_h_cand, false) # false means don't throw error if not PosDef
 
@@ -88,11 +86,8 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
                 else
                     σ2x = tmp.mat[γindx, γindx][1]
                     lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[γindx[1]], sqrt(σ2x)), vec(model.X[:,γindx]))
-                    lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
                 end
-
             elseif nγ > 1
-
                 tmp = sqfChol_to_Σ(β_x_h_cand, δ_x_h_cand, false) # false means don't throw error if not PosDef
 
                 if isnothing(tmp)
@@ -100,24 +95,28 @@ function update_η_h_Met_Σx_full!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
                     not_auto_reject = !auto_reject
                 else
                     Σx = PDMat_adj(tmp.mat[γindx, γindx])
-                    lNX_mat_cand[:,h] = logpdf(MultivariateNormal(μ_x_h_cand[γindx], Σx), Matrix(model.X[:,γindx]'))
-                    lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand)
+                    lNX_mat_cand[:,h] = logpdf(MultivariateNormal(μ_x_h_cand[γindx], Σx), permutedims(model.X[:,γindx]))
                 end
-
             end
+
+            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+
         else # variance-inflation method
-            βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
-                γ_h, model.state.γδc) # either variance-inflated or subset
 
-            tmp = lNX_sqfChol(Matrix(model.X'), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand, false) # false means don't throw error if not PosDef
+            throw("Variance-inflation method no longer supported.")
 
-            if isnothing(tmp)
-                auto_reject = true
-                not_auto_reject = !auto_reject
-            else
-                lNX_mat_cand[:,h] = deepcopy(tmp)
-                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
-            end
+            # βγ_x_h_cand, δγ_x_h_cand = βδ_x_h_modify_γ(β_x_h_cand, δ_x_h_cand,
+            #     γ_h, model.state.γδc) # either variance-inflated or subset
+
+            # tmp = lNX_sqfChol(permutedims(model.X), μ_x_h_cand, βγ_x_h_cand, δγ_x_h_cand, false) # false means don't throw error if not PosDef
+
+            # if isnothing(tmp)
+            #     auto_reject = true
+            #     not_auto_reject = !auto_reject
+            # else
+            #     lNX_mat_cand[:,h] = deepcopy(tmp)
+            #     lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+            # end
 
         end
     end
@@ -283,33 +282,20 @@ function update_η_h_Met_Σx_diag!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0st
     nγ = length(γindx)
 
     if not_auto_reject
-        if model.state.γδc == Inf # subset method
+        if model.state.γδc == Inf || isnothing(model.state.γδc) # subset and integration methods are identical with SigX_diag
             if nγ == 0
                 lNX_mat_cand[:,h] = zeros(Float64, model.n)
-                lωNX_vec_cand = zeros(Float64, model.n) # n vector
             elseif nγ == 1
                 lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[γindx[1]], sqrt(δ_x_h_cand[γindx[1]])), vec(model.X[:,γindx]))
-                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
             elseif nγ > 1
-                lNX_mat_cand[:,h] = lNX_Σdiag(Matrix(model.X[:,γindx]'),
+                lNX_mat_cand[:,h] = lNX_Σdiag(permutedims(model.X[:,γindx]),
                     μ_x_h_cand[γindx], δ_x_h_cand[γindx])
-                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand)
-            end
-        elseif isnothing(model.state.γδc) # integration method
-            if nγ == 0
-                lNX_mat_cand[:,h] = zeros(Float64, model.n)
-                lωNX_vec_cand = zeros(Float64, model.n) # n vector
-            elseif nγ == 1
-                lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[γindx[1]], sqrt(δ_x_h_cand[γindx[1]])), vec(model.X[:,γindx]))
-                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
-            elseif nγ > 1
-                lNX_mat_cand[:,h] = lNX_Σdiag(Matrix(model.X[:,γindx]'),
-                    μ_x_h_cand[γindx], δ_x_h_cand[γindx])
-                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand)
             end
         else # variance-inflation method
             throw("Variance inflation method not supported when Sigma_x is diagonal.")
         end
+
+        lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
     end
 
     if n_h == 0
@@ -464,16 +450,16 @@ function update_η_h_Met_K1!(model::Model_BNP_WMReg_Joint, h::Int, Λβ0star_ηy
         if model.state.γδc == Inf || isnothing(model.state.γδc) # subset or integration method
             if γ_h[1]
                 lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δ_x_h_cand[1])), vec(model.X))
-                lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
             else
                 lNX_mat_cand[:,h] = zeros(Float64, model.n)
-                lωNX_vec_cand = zeros(Float64, model.n) # n vector
             end
         else # variance-inflation method
             δγ_x_h_cand = δ_x_h_modify_γ(δ_x_h_cand, γ_h, model.state.γδc)
             lNX_mat_cand[:,h] = logpdf.(Normal(μ_x_h_cand[1], sqrt(δγ_x_h_cand[1])), vec(model.X))
-            lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
         end
+
+        lωNX_vec_cand = lωNXvec(model.state.lω, lNX_mat_cand) # n vector
+
     end
 
     if n_h == 0
@@ -721,7 +707,7 @@ function δ_x_h_modify_γ(δ_x::Array{T,1},
     δout = deepcopy(δ_x)
 
     for k in modify_indx # this works even if no modifications are necessary
-        δout[k] *= γδc[k]
+        δout[k] += γδc[k]
     end
     return δout
 end

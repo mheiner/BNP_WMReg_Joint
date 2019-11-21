@@ -1,4 +1,4 @@
-using DPmRegJoint
+using BNP_WMReg_Joint
 using Test
 
 # @test hello("Julia") == "Hello, Julia"
@@ -97,3 +97,27 @@ println(model.state.accpt / float(model.state.iter))
 println(counts(model.state.S, 1:model.H))
 println(exp.(model.state.lω))
 println(model.state.α)
+
+
+## Check sqfChol_to_Σ and lNX_sqfChol
+mu = [1.0, 1.5, 2.0]
+delta = [3.0, 4.0, 1.0]
+betas = [ [0.0, 0.5], [2.5] ]
+
+
+Sig = sqfChol_to_Σ(betas, delta)
+Sig.mat
+
+Sig.mat[3,2] ≈ -delta[3]*betas[2][1]
+Sig.mat[3,1] ≈ delta[3]*(betas[1][1]*betas[2][1]-betas[1][2])
+Sig.mat[2,2] ≈ delta[2] + delta[3]*betas[2][1]^2
+Sig.mat[2,1] ≈ -delta[2]*betas[1][1] - delta[3]*betas[2][1]*(betas[1][1]*betas[2][1]-betas[1][2])
+Sig.mat[1,1] ≈ delta[1] + delta[2]*betas[1][1]^2 + delta[3]*(betas[1][1]*betas[2][1]-betas[1][2])^2
+
+X = [0.0, 2.0, 1.2]
+
+lNX_sqfChol(X, mu, betas, delta) ≈ -0.5*length(mu)*log(2π) - 0.5*logdet(Sig) -0.5*( (X - mu)' * ( Sig \ (X - mu) ) )
+
+XX = hcat(X, [-1.5, -1.0, 0.0])
+
+lNX_sqfChol(XX, mu, betas, delta)
