@@ -24,7 +24,7 @@ end
 function lNXmat_lωNXvec_h(model::Model_BNP_WMReg_Joint, γ_h::BitArray{1}, h::Int)
 
     lNX = deepcopy(model.state.lNX)
-    
+
     γindx = findall(γ_h)
     nγ = length(γindx)
 
@@ -37,10 +37,10 @@ function lNXmat_lωNXvec_h(model::Model_BNP_WMReg_Joint, γ_h::BitArray{1}, h::I
         elseif nγ == 1
 
             lNX[:,h] = logpdf.(Normal(model.state.μ_x[h,γindx[1]], sqrt(model.state.δ_x[h,γindx[1]])), vec(model.X[:,γindx]))
-        
+
         elseif nγ > 1 && model.Σx_type == :full
 
-            βγ_x_h, δγ_x_h = βδ_x_h_modify_γ( [ model.state.β_x[j][h,:] for j = 1:length(model.state.β_x) ], 
+            βγ_x_h, δγ_x_h = βδ_x_h_modify_γ( [ model.state.β_x[j][h,:] for j = 1:length(model.state.β_x) ],
                 model.state.δ_x[h,:], γ_h, model.state.γδc) # either variance-inflated or subset
 
             lNX[:,h] = lNX_sqfChol(Matrix(model.X[:,γindx]'), model.state.μ_x[h,γindx], βγ_x_h, δγ_x_h, true)
@@ -72,7 +72,7 @@ function lNXmat_lωNXvec_h(model::Model_BNP_WMReg_Joint, γ_h::BitArray{1}, h::I
 
         elseif nγ > 1 && model.Σx_type == :full
 
-            Σx = PDMat( sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:length(model.state.β_x) ], 
+            Σx = PDMat( sqfChol_to_Σ( [ model.state.β_x[k][h,:] for k = 1:length(model.state.β_x) ],
                 model.state.δ_x[h,:] ).mat[γindx, γindx] )
 
             lNX[:,h] = logpdf( MultivariateNormal(model.state.μ_x[h,γindx], Σx), Matrix(model.X[:,γindx]') )
@@ -89,7 +89,7 @@ function lNXmat_lωNXvec_h(model::Model_BNP_WMReg_Joint, γ_h::BitArray{1}, h::I
     end
 
     lωNX_vec = lωNXvec(model.state.lω, lNX)
-    
+
     return lNX, lωNX_vec
 end
 
@@ -155,7 +155,7 @@ end
 
 #         ## calculate lNy
 #         lNy_h = ldens_y_h(model, model.state.γ[h,:], h)
-        
+
 #         ## loop through k
 #         for k in up_indx
 #             lfc_on[h,k] = update_γ_hk!(model, lNy_h, h, k)
@@ -186,7 +186,7 @@ function update_γ_h_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1},
     if n_h > 0
         Λβ0star_ηy = model.state.Λ0star_ηy * model.state.β0star_ηy
         βΛβ0star_ηy = PDMats.quad(model.state.Λ0star_ηy, model.state.β0star_ηy)
-    
+
         D_h = construct_Dh(h, model.X[indx_h,:], model.state.μ_x[h,:], model.state.γ[h,:] )
         a1_h = 0.5 .* ( model.state.ν_δy + n_h )
         Λ1star_ηy_h = get_Λ1star_ηy_h(D_h, model.state.Λ0star_ηy)
@@ -217,11 +217,11 @@ function update_γ_h_block!(model::Model_BNP_WMReg_Joint, up_indx::Array{Int,1},
     lNx_h_old = deepcopy( model.state.lNX[indx_h, h] )
 
     ## Metropolis step
-    lp_old = sum( log.(model.state.π_γ[switch_indx][ findall( model.state.γ[h, switch_indx] ) ]) ) + 
+    lp_old = sum( log.(model.state.π_γ[switch_indx][ findall( model.state.γ[h, switch_indx] ) ]) ) +
              sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!model.state.γ[h, switch_indx] ) ]) )
     lp_old += (sum(lNx_h_old) - sum(model.state.lωNX_vec) + sum(lmargy_old) )
 
-    lp_alt = sum( log.(model.state.π_γ[switch_indx][ findall( γ_h_alt[switch_indx] ) ]) ) + 
+    lp_alt = sum( log.(model.state.π_γ[switch_indx][ findall( γ_h_alt[switch_indx] ) ]) ) +
              sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!γ_h_alt[switch_indx] ) ]) )
     lp_alt += (sum(lNx_h_alt) - sum(lωNX_vec_alt) + sum(lmargy_alt) )
 
@@ -254,7 +254,7 @@ end
 #     ## Calculate lNy under both scenarios
 #     lNy_h_alt = ldens_y_h(model, γ_h_alt, h)
 #     lNy_h_old = ldens_y_h(model, model.state.γ[h,:], h)
-    
+
 #     ## Calculate lNX under alternate scenario
 #     lNX_alt, lωNX_vec_alt = lNXmat_lωNXvec_h(model, γ_h_alt, h)
 
@@ -263,11 +263,11 @@ end
 #     lNx_h_old = deepcopy( model.state.lNX[indx_h, h] )
 
 #     ## Metropolis step
-#     lp_old = sum( log.(model.state.π_γ[switch_indx][ findall( model.state.γ[h, switch_indx] ) ]) ) + 
+#     lp_old = sum( log.(model.state.π_γ[switch_indx][ findall( model.state.γ[h, switch_indx] ) ]) ) +
 #              sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!model.state.γ[h, switch_indx] ) ]) )
 #     lp_old += ( sum(lNx_h_old) - sum(model.state.lωNX_vec) + sum( lNy_h_old ) )
 
-#     lp_alt = sum( log.(model.state.π_γ[switch_indx][ findall( γ_h_alt[switch_indx] ) ]) ) + 
+#     lp_alt = sum( log.(model.state.π_γ[switch_indx][ findall( γ_h_alt[switch_indx] ) ]) ) +
 #              sum( log.( 1.0 .- model.state.π_γ[switch_indx][ findall( .!γ_h_alt[switch_indx] ) ]) )
 #     lp_alt += ( sum(lNx_h_alt) - sum(lωNX_vec_alt) + sum( lNy_h_alt ) )
 
@@ -341,8 +341,8 @@ function update_ξ!(model::Model_BNP_WMReg_Joint) # full conditional probabiliti
 
         else
 
-            laa0 = lgamma( model.prior.π_sh[k,2] + model.H ) + lgamma( model.prior.π_sh[k,1] + model.prior.π_sh[k,2] ) - 
-                lgamma( model.prior.π_sh[k,2] ) - lgamma( model.prior.π_sh[k,1] + model.prior.π_sh[k,2] + model.H )
+            laa0 = logabsgamma( model.prior.π_sh[k,2] + model.H )[1] + logabsgamma( model.prior.π_sh[k,1] + model.prior.π_sh[k,2] )[1] -
+                logabsgamma( model.prior.π_sh[k,2] )[1] - logabsgamma( model.prior.π_sh[k,1] + model.prior.π_sh[k,2] + model.H )[1]
             aa0 = exp(laa0)
 
             aa = π_ξ[k] * aa0
@@ -356,6 +356,3 @@ function update_ξ!(model::Model_BNP_WMReg_Joint) # full conditional probabiliti
 
     return nothing
 end
-
-
-

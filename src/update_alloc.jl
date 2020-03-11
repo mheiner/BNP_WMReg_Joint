@@ -238,7 +238,7 @@ function llik_numerator(yX::Array{T,2}, K::Int, H::Int,
         γindx = findall(γ[h,:])
         γindx_withy = vcat(1, γindx .+ 1)
         nγ = length(γindx)
-    
+
         if nγ == 0
 
             lW[:,h] = lω[h] .+ logpdf.( Normal(μ_y[h], sqrt(δ_y[h])), yX[:,1] )
@@ -402,7 +402,7 @@ end
 
 
 function lmargy(Λ::PDMat, a::T, b::T) where T <: Real
-    return -0.5 * logdet(Λ) + lgamma(a) - a * log(b)
+    return -0.5 * logdet(Λ) + logabsgamma(a)[1] - a * log(b)
 end
 
 ## Integrate out eta_y and Metropolize
@@ -417,7 +417,7 @@ end
 #     elseif model.γ_type in (:fixed, :global)
 #         D_vec = [ construct_Dh(h, model.X, model.state.μ_x[h,:], model.state.γ ) for h = 1:model.H ] # this is evaluated for ALL i and h, so it never changes
 #     end
-    
+
 #     ## These will evolve
 #     indx_h_vec = [ findall(model.state.S .== h) for h = 1:model.H ]
 #     n_h_vec = [ length(indx_h_vec[h]) for h = 1:model.H ]
@@ -435,7 +435,7 @@ end
 #     for i = 1:model.n
 
 #         Si = model.state.S[i]
-        
+
 #         ### collect Lam1, a1, b1 for component Si without y_i
 #         lmargy_in = deepcopy(lmargy_out)
 
@@ -457,7 +457,7 @@ end
 #             Λ_tmp_vec[ Si ] = PDMat( Λ_tmp_vec[ Si ] + (-1.0) .* d_tmp * d_tmp' ) # PDMats doesn't have a subtract function
 #             β1star00_tmp_vec[ Si ] -= (d_tmp .* model.y[i])
 #             β1star_tmp_vec[ Si ] = Λ_tmp_vec[ Si ] \ β1star00_tmp_vec[ Si ]
-#             b1_tmp_vec[ Si ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[setdiff(indx_h_vec[Si], i)], βΛβ0star_ηy, 
+#             b1_tmp_vec[ Si ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, model.y[setdiff(indx_h_vec[Si], i)], βΛβ0star_ηy,
 #                 Λ_tmp_vec[ Si ], β1star_tmp_vec[ Si ] )
 #             lmargy_out[ Si ] = lmargy(Λ_tmp_vec[ Si ], a1_vec[ Si ] - 0.5,  b1_tmp_vec[ Si ])
 #         end
@@ -470,7 +470,7 @@ end
 #             Λ_tmp_vec[ h ] = PDMat( Λ_tmp_vec[ h ] + d_tmp * d_tmp' )
 #             β1star00_tmp_vec[ h ] += (d_tmp .* model.y[i])
 #             β1star_tmp_vec[ h ] = Λ_tmp_vec[h] \ β1star00_tmp_vec[h]
-#             b1_tmp_vec[ h ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, vcat(model.y[indx_h_vec[h]], model.y[i]), βΛβ0star_ηy, 
+#             b1_tmp_vec[ h ] = get_b1_δy_h(model.state.ν_δy, model.state.s0_δy, vcat(model.y[indx_h_vec[h]], model.y[i]), βΛβ0star_ηy,
 #                 Λ_tmp_vec[h], β1star_tmp_vec[h]) # may concatenate y since that argument only calulates y'y
 #             lmargy_in[ h ] = lmargy(Λ_tmp_vec[h], a1_vec[h] + 0.5, b1_tmp_vec[h])
 #         end
@@ -518,9 +518,8 @@ end
 #         end
 
 #     end
-    
+
 #     model.state.n_occup = length(unique(model.state.S))
 
 #     return nothing
 # end
-
